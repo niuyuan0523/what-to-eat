@@ -1,0 +1,102 @@
+<view class="menu-container">
+  
+  <!-- 左侧分类导航 -->
+  <scroll-view class="sidebar" scroll-y scroll-with-animation>
+    <view 
+      class="sidebar-item {{currentTab === index ? 'active' : ''}}" 
+      wx:for="{{categories}}" 
+      wx:key="id" 
+      bindtap="switchCategory" 
+      data-index="{{index}}"
+      data-id="{{item.id}}"
+    >
+      <text class="sidebar-text">{{item.name}}</text>
+    </view>
+  </scroll-view>
+
+  <!-- 右侧商品列表 -->
+  <scroll-view 
+    class="goods-container" 
+    scroll-y 
+    scroll-into-view="{{toView}}" 
+    scroll-with-animation
+    bindscroll="onGoodsScroll"
+  >
+    <view class="category-group" wx:for="{{categories}}" wx:key="id" id="{{item.id}}">
+      <view class="category-title">{{item.name}}</view>
+      
+      <!-- 使用 van-card 展示商品 -->
+      <van-card 
+        wx:for="{{item.goodsList}}" 
+        wx:for-item="goods" 
+        wx:key="id"
+        title="{{goods.name}}"
+        desc="{{goods.desc}}"
+        price="{{goods.price}}"
+        original-price="{{goods.originalPrice > goods.price ? goods.originalPrice : ''}}"
+        thumb="{{goods.image}}"
+        tag="月售 {{goods.sales}}"
+        class="card-info"
+      >
+        <!-- 自定义数量控制器 -->
+        <view slot="num" class="card-num">
+          <van-stepper 
+            button-size="20px"
+            theme="round"
+            disable-input
+            value="{{goods.cartCount || 0}}" 
+            min="0"
+            bind:change="onGoodsStepperChange" 
+            data-id="{{goods.id}}"
+          />
+        </view>
+      </van-card>
+    </view>
+  </scroll-view>
+
+  <!-- 底部结算栏 -->
+  <van-submit-bar 
+    price="{{totalPrice * 100}}" 
+    label="合计"
+    button-text="{{cartCount > 0 ? '去结算' : '请点餐'}}"
+    disabled="{{cartCount === 0}}"
+    bind:submit="onCheckout"
+  >
+    <view class="cart-icon-wrapper" bindtap="showCartModal">
+      <van-icon name="shopping-cart-o" size="50rpx" />
+      <view class="cart-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
+    </view>
+  </van-submit-bar>
+
+  <!-- 购物车弹窗 -->
+  <van-popup show="{{showCart}}" position="bottom" round bind:close="hideCartModal">
+    <view class="cart-modal-content">
+      <view class="cart-modal-header">
+        <text class="cart-modal-title">已选商品</text>
+        <van-button size="small" type="default" bindtap="clearCart" wx:if="{{cartCount > 0}}">清空</van-button>
+      </view>
+      <scroll-view class="cart-modal-body" scroll-y wx:if="{{cartCount > 0}}">
+        <view class="cart-item" wx:for="{{cartItems}}" wx:key="id">
+          <image class="cart-item-img" src="{{item.image}}" mode="aspectFill"></image>
+          <view class="cart-item-info">
+            <text class="cart-item-name">{{item.name}}</text>
+            <text class="cart-item-price">￥{{item.price}}</text>
+          </view>
+          <van-stepper 
+            button-size="22px"
+            theme="round"
+            disable-input
+            value="{{item.cartCount}}" 
+            min="0"
+            bind:change="onStepperChange" 
+            data-id="{{item.id}}" 
+          />
+        </view>
+      </scroll-view>
+      <view class="cart-modal-empty" wx:else>
+        <van-empty description="购物车是空的" />
+      </view>
+    </view>
+  </van-popup>
+
+</view>

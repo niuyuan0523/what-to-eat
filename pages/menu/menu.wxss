@@ -1,0 +1,201 @@
+/* pages/menu/menu.wxss */
+page {
+  height: 100%;
+  background-color: #f8f8f8;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-container {
+  display: flex;
+  flex: 1;
+  height: calc(100% - 100rpx); /* 留出底部购物车的高度 */
+  overflow: hidden;
+}
+
+/* 左侧分类样式 */
+.sidebar {
+  width: 180rpx;
+  background-color: #f4f4f4;
+  height: 100%;
+}
+
+.sidebar-item {
+  height: 110rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: #666;
+  position: relative;
+}
+
+.sidebar-item.active {
+  background-color: #ffffff;
+  color: #333333;
+  font-weight: bold;
+}
+
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 35rpx;
+  height: 40rpx;
+  width: 8rpx;
+  background-color: #ffcc00; /* 点餐系统经典黄色主色调 */
+  border-radius: 0 4rpx 4rpx 0;
+}
+
+/* 右侧商品列表样式 */
+.goods-container {
+  flex: 1;
+  background-color: #ffffff;
+  height: 100%;
+  padding: 0 20rpx 180rpx 20rpx;
+  box-sizing: border-box;
+}
+
+.category-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #333;
+  padding: 24rpx 0 10rpx 0;
+  background-color: #ffffff;
+}
+
+/* van-card 自定义样式 */
+.card-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-info .van-card__bottom{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.goods-desc {
+  font-size: 20rpx;
+  color: #999;
+  line-height: 30rpx;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.goods-sales {
+  font-size: 20rpx;
+  color: #999;
+  display: block;
+  margin-top: 5rpx;
+}
+
+/* 底部结算栏样式 */
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100rpx;
+  background-color: #fff;
+  box-shadow: 0 -2rpx 10rpx rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30rpx;
+  z-index: 99;
+}
+
+.cart-icon-wrapper {
+  position: relative;
+  display: inline-block;
+  padding: 10rpx 30rpx;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -8rpx;
+  right: 10rpx;
+  background-color: #ee0a24;
+  color: white;
+  font-size: 20rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  padding: 0 8rpx;
+  box-sizing: border-box;
+  z-index: 100;
+}
+
+/* 购物车弹窗样式 */
+.cart-modal-content {
+  padding: 30rpx;
+  max-height: 70vh;
+}
+
+.cart-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f2f2f2;
+}
+
+.cart-modal-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.cart-modal-body {
+  max-height: calc(70vh - 120rpx);
+  padding: 20rpx 0;
+}
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f2f2f2;
+}
+
+.cart-item:last-child {
+  border-bottom: none;
+}
+
+.cart-item-img {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 8rpx;
+  margin-right: 20rpx;
+  background-color: #f5f5f5;
+}
+
+.cart-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.cart-item-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10rpx;
+}
+
+.cart-item-price {
+  font-size: 26rpx;
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+.cart-modal-empty {
+  padding: 60rpx 0;
+}
