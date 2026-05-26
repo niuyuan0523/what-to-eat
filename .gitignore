@@ -8,6 +8,7 @@ build/
 
 # 开发工具配置
 .vscode/
+.qoder/
 .idea/
 *.swp
 *.swo
