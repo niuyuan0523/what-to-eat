@@ -1,0 +1,201 @@
+<view class="container">
+  <!-- 顶部操作栏 -->
+  <view class="header">
+    <text class="title">数据管理后台</text>
+    <view class="actions">
+      <button class="btn btn-small" bindtap="exportData">导出数据</button>
+      <button class="btn btn-small btn-primary" bindtap="importData">导入数据</button>
+    </view>
+  </view>
+
+  <!-- 分类标签栏 -->
+  <view class="category-tabs">
+    <scroll-view scroll-x class="tabs-scroll">
+      <view 
+        class="tab-item {{currentTab === index ? 'active' : ''}}" 
+        wx:for="{{categories}}" 
+        wx:key="id"
+        bindtap="switchCategory"
+        data-index="{{index}}"
+      >
+        {{item.name}}
+      </view>
+      <view class="tab-item add-tab" bindtap="addCategory">+ 添加</view>
+    </scroll-view>
+  </view>
+
+  <!-- 当前分类内容 -->
+  <view class="content" wx:if="{{categories[currentTab]}}">
+    <!-- 分类操作栏 -->
+    <view class="category-actions">
+      <text class="category-name">{{categories[currentTab].name}}</text>
+      <view class="action-buttons">
+        <button class="btn btn-small" bindtap="editCategory">编辑分类</button>
+        <button class="btn btn-small btn-danger" bindtap="deleteCategory">删除分类</button>
+        <button class="btn btn-small btn-primary" bindtap="addGoods">+ 添加商品</button>
+      </view>
+    </view>
+
+    <!-- 商品列表 -->
+    <view class="goods-list">
+      <view class="goods-item" wx:for="{{categories[currentTab].goodsList}}" wx:key="id" wx:for-index="goodsIndex">
+        <image class="goods-image" src="{{item.image}}" mode="aspectFill" />
+        <view class="goods-info">
+          <text class="goods-name">{{item.name}}</text>
+          <text class="goods-desc">{{item.desc}}</text>
+          <view class="goods-meta">
+            <text class="goods-price">¥{{item.price}}</text>
+            <text class="goods-original-price" wx:if="{{item.originalPrice > item.price}}">¥{{item.originalPrice}}</text>
+            <text class="goods-sales">销量: {{item.sales}}</text>
+          </view>
+          <text class="goods-id">ID: {{item.id}}</text>
+        </view>
+        <view class="goods-actions">
+          <button class="btn-icon" bindtap="editGoods" data-index="{{goodsIndex}}">编辑</button>
+          <button class="btn-icon btn-danger" bindtap="deleteGoods" data-index="{{goodsIndex}}">删除</button>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty-state" wx:if="{{categories[currentTab].goodsList.length === 0}}">
+        <text class="empty-text">暂无商品，点击"添加商品"开始添加</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 编辑弹窗 - 使用 Vant Popup -->
+  <van-popup 
+    show="{{showEditModal}}" 
+    position="bottom"
+    round
+    custom-style="height: 75%; max-height: 1200rpx;"
+    bind:close="closeModal"
+  >
+    <view class="modal-container">
+      <!-- 弹窗标题 -->
+      <view class="modal-header">
+        <text class="modal-title">
+          <van-icon name="{{editMode === 'add' ? 'plus' : 'edit'}}" size="18px" />
+          {{editMode === 'add' ? '添加' : '编辑'}} {{editType === 'category' ? '分类' : '商品'}}
+        </text>
+        <van-icon name="cross" size="20px" color="#999" bindtap="closeModal" />
+      </view>
+
+      <!-- 表单内容 -->
+      <scroll-view scroll-y class="modal-body">
+        <!-- 分类表单 -->
+        <block wx:if="{{editType === 'category'}}">
+          <van-field
+            value="{{formData.name}}"
+            bind:change="onFieldChange"
+            data-field="name"
+            label="分类名称"
+            placeholder="请输入分类名称"
+            required
+            clearable
+            border="{{true}}"
+          />
+          <van-field
+            value="{{formData.id}}"
+            bind:change="onFieldChange"
+            data-field="id"
+            label="分类 ID"
+            placeholder="自动生成"
+            disabled="{{editMode === 'edit'}}"
+            border="{{true}}"
+          />
+        </block>
+
+        <!-- 商品表单 -->
+        <block wx:if="{{editType === 'goods'}}">
+          <van-field
+            value="{{formData.name}}"
+            bind:change="onFieldChange"
+            data-field="name"
+            label="商品名称"
+            placeholder="请输入商品名称"
+            required
+            clearable
+            border="{{true}}"
+          />
+          
+          <van-field
+            value="{{formData.price}}"
+            bind:change="onFieldChange"
+            data-field="price"
+            label="价格"
+            type="digit"
+            placeholder="0.00"
+            required
+            border="{{true}}"
+          />
+          
+          <van-field
+            value="{{formData.originalPrice}}"
+            bind:change="onFieldChange"
+            data-field="originalPrice"
+            label="原价"
+            type="digit"
+            placeholder="0.00"
+            border="{{true}}"
+          />
+
+          <van-field
+            value="{{formData.sales}}"
+            bind:change="onFieldChange"
+            data-field="sales"
+            label="销量"
+            type="number"
+            placeholder="0"
+            border="{{true}}"
+          />
+
+          <van-field
+            value="{{formData.image}}"
+            bind:change="onFieldChange"
+            data-field="image"
+            label="图片URL"
+            placeholder="https://..."
+            clearable
+            border="{{true}}"
+          />
+
+          <van-field
+            value="{{formData.desc}}"
+            bind:change="onFieldChange"
+            data-field="desc"
+            label="商品描述"
+            type="textarea"
+            placeholder="请输入商品描述"
+            maxlength="200"
+            show-word-limit
+            autosize="{{true}}"
+            border="{{true}}"
+          />
+        </block>
+      </scroll-view>
+
+      <!-- 底部按钮 -->
+      <view class="modal-footer">
+        <van-button 
+          block 
+          round 
+          type="default" 
+          bindtap="closeModal"
+          custom-class="footer-btn"
+        >
+          取消
+        </van-button>
+        <van-button 
+          block 
+          round 
+          type="primary" 
+          bindtap="saveForm"
+          custom-class="footer-btn"
+        >
+          保存
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
+</view>

@@ -23,7 +23,7 @@
     bindscroll="onGoodsScroll"
   >
     <view class="category-group" wx:for="{{categories}}" wx:key="id" id="{{item.id}}">
-      <view class="category-title">{{item.name}}</view>
+      <view class="category-title" bindtap="onCategoryTitleTap">{{item.name}}</view>
       
       <!-- 使用 van-card 展示商品 -->
       <van-card 
