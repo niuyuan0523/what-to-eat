@@ -17,13 +17,43 @@ Page({
     this.loadData()
   },
 
-  // 加载数据
+  // 加载数据（使用云函数获取，确保权限正确）
   loadData() {
     wx.showLoading({ title: '加载中...' })
     
+    // 优先使用云函数获取数据
+    wx.cloud.callFunction({
+      name: 'updateMenuData',
+      data: {
+        action: 'get'
+      },
+      success: res => {
+        console.log('云函数加载成功', res)
+        if (res.result && res.result.success && res.result.data && res.result.data.length > 0) {
+          const doc = res.result.data[0]
+          this.setData({
+            docId: doc._id,
+            categories: doc.categories || []
+          })
+          wx.hideLoading()
+        } else {
+          // 云函数无数据，尝试直接查询
+          this.loadDataDirect()
+        }
+      },
+      fail: err => {
+        console.log('云函数调用失败，使用直接查询', err)
+        // 云函数调用失败，回退到直接查询
+        this.loadDataDirect()
+      }
+    })
+  },
+
+  // 直接查询数据库（备用方案）
+  loadDataDirect() {
     db.collection('menu_config').get({
       success: res => {
-        console.log('加载成功', res)
+        console.log('直接查询成功', res)
         if (res.data && res.data.length > 0) {
           const doc = res.data[0]
           this.setData({
@@ -204,8 +234,56 @@ Page({
     this.saveData(categories)
   },
 
-  // 保存数据到数据库
+  // 保存数据到数据库（使用云函数，绕过权限限制）
   saveData(categories) {
+    wx.showLoading({ title: '保存中...' })
+    
+    console.log('开始保存数据，docId:', this.data.docId)
+    console.log('保存的数据:', categories)
+    
+    // 使用云函数保存数据
+    wx.cloud.callFunction({
+      name: 'updateMenuData',
+      data: {
+        action: 'update',
+        docId: this.data.docId,
+        categories: categories
+      },
+      success: res => {
+        console.log('云函数保存成功', res)
+        wx.hideLoading()
+        
+        if (res.result && res.result.success) {
+          this.closeModal()
+          this.setData({ categories })
+          wx.showToast({
+            title: '保存成功',
+            icon: 'success'
+          })
+          
+          // 重新加载数据，确保同步
+          setTimeout(() => {
+            this.loadData()
+          }, 1000)
+        } else {
+          wx.showToast({
+            title: res.result?.message || '保存失败',
+            icon: 'error'
+          })
+        }
+      },
+      fail: err => {
+        console.error('云函数调用失败', err)
+        wx.hideLoading()
+        
+        // 云函数失败，尝试直接更新
+        this.saveDataDirect(categories)
+      }
+    })
+  },
+
+  // 直接更新数据库（备用方案）
+  saveDataDirect(categories) {
     wx.showLoading({ title: '保存中...' })
     
     db.collection('menu_config').doc(this.data.docId).update({
@@ -213,7 +291,7 @@ Page({
         categories: categories
       },
       success: res => {
-        console.log('保存成功', res)
+        console.log('直接保存成功', res)
         wx.hideLoading()
         this.closeModal()
         this.setData({ categories })
@@ -221,13 +299,19 @@ Page({
           title: '保存成功',
           icon: 'success'
         })
+        
+        // 重新加载数据
+        setTimeout(() => {
+          this.loadData()
+        }, 1000)
       },
       fail: err => {
         console.error('保存失败', err)
         wx.hideLoading()
-        wx.showToast({
+        wx.showModal({
           title: '保存失败',
-          icon: 'error'
+          content: `错误信息: ${err.errMsg}\n\n请检查:\n1. 数据库权限设置\n2. 云函数是否已部署\n3. 是否为数据创建者`,
+          showCancel: false
         })
       }
     })
