@@ -5,6 +5,7 @@ Page({
     statusBarHeight: 0,     // 状态栏高度
     navBarHeight: 44,       // 导航栏内容高度
     navTotalHeight: 0,      // 导航栏总高度(px)
+    bottomHeight: 50,       // 底部高度(安全区域 + 结算栏)
     // 订单列表
     orderList: [],
     orderLoading: false,
@@ -30,10 +31,16 @@ Page({
     const navBarHeight = 44; // 导航栏内容高度
     const navTotalHeight = statusBarHeight + navBarHeight; // 导航栏总高度(px)
     
+    // 计算底部安全区域高度
+    const screenHeight = systemInfo.screenHeight;
+    const safeAreaBottom = systemInfo.safeArea ? (screenHeight - systemInfo.safeArea.bottom) : 0;
+    const bottomHeight = safeAreaBottom + 50; // 安全区域 + van-submit-bar(50px)
+    
     this.setData({
       statusBarHeight: statusBarHeight,
       navBarHeight: navBarHeight,
-      navTotalHeight: navTotalHeight
+      navTotalHeight: navTotalHeight,
+      bottomHeight: bottomHeight
     });
     
     this.loadCategoriesFromCloud();

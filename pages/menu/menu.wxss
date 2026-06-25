@@ -58,11 +58,17 @@ page {
   border-radius: 3rpx;
 }
 
-/* 点菜容器 */
+/* 点菜容器：外层纵向flex（上中下） */
 .menu-container {
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 中间内容区：内层横向flex（左右） */
+.content-row {
+  display: flex;
   flex: 1;
-  /* height 通过内联样式动态设置 */
   overflow: hidden;
 }
 
@@ -71,6 +77,7 @@ page {
   width: 180rpx;
   background-color: #f4f4f4;
   height: 100%;
+  flex-shrink: 0;
 }
 
 .sidebar-item {
@@ -105,8 +112,9 @@ page {
   flex: 1;
   background-color: #ffffff;
   height: 100%;
-  padding: 0 20rpx 80rpx 20rpx;
+  padding: 0 20rpx 0 20rpx;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .category-title {
@@ -148,10 +156,6 @@ page {
 
 /* 底部结算栏样式 */
 .bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
   height: 100rpx;
   background-color: #fff;
   box-shadow: 0 -2rpx 10rpx rgba(0,0,0,0.05);
@@ -159,7 +163,7 @@ page {
   align-items: center;
   justify-content: space-between;
   padding: 0 30rpx;
-  z-index: 99;
+  flex-shrink: 0;
 }
 
 .cart-icon-wrapper {
