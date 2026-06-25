@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "吃什么",
+  "navigationStyle": "custom",
   "navigationBarBackgroundColor": "#ffffff",
   "navigationBarTextStyle": "black",
   "usingComponents": {
@@ -11,6 +12,8 @@
     "van-submit-bar": "@vant/weapp/submit-bar/index",
     "van-empty": "@vant/weapp/empty/index",
     "van-tabs": "@vant/weapp/tabs/index",
-    "van-tab": "@vant/weapp/tab/index"
+    "van-tab": "@vant/weapp/tab/index",
+    "van-tag": "@vant/weapp/tag/index",
+    "van-loading": "@vant/weapp/loading/index"
   }
 }

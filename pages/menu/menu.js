@@ -1,5 +1,13 @@
 Page({
   data: {
+    // 导航栏
+    activeNav: 0,           // 0: 点菜, 1: 订单
+    statusBarHeight: 0,     // 状态栏高度
+    navBarHeight: 44,       // 导航栏内容高度
+    navTotalHeight: 0,      // 导航栏总高度(px)
+    // 订单列表
+    orderList: [],
+    orderLoading: false,
     // 1. 从云数据库获取数据（初始为空，在 onLoad 中加载）
     categories: [],
     currentTab: 0,        // 当前选中的分类索引
@@ -16,7 +24,103 @@ Page({
 
   // 页面加载时从云数据库获取数据
   onLoad() {
+    // 获取状态栏高度，计算导航栏总高度
+    const systemInfo = wx.getSystemInfoSync();
+    const statusBarHeight = systemInfo.statusBarHeight;
+    const navBarHeight = 44; // 导航栏内容高度
+    const navTotalHeight = statusBarHeight + navBarHeight; // 导航栏总高度(px)
+    
+    this.setData({
+      statusBarHeight: statusBarHeight,
+      navBarHeight: navBarHeight,
+      navTotalHeight: navTotalHeight
+    });
+    
     this.loadCategoriesFromCloud();
+  },
+
+  // 切换到订单列表时加载数据
+  onShow() {
+    if (this.data.activeNav === 1) {
+      this.loadOrderList();
+    }
+  },
+
+  // 切换顶部导航栏
+  switchNav(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (index === this.data.activeNav) return;
+    
+    this.setData({ activeNav: index });
+    
+    if (index === 1) {
+      this.loadOrderList();
+    }
+  },
+
+  // 加载订单列表（从云数据库获取）
+  loadOrderList() {
+    this.setData({ orderLoading: true });
+    
+    const db = wx.cloud.database();
+    db.collection('orders')
+      .orderBy('createTime', 'desc')
+      .limit(50)
+      .get({
+        success: res => {
+          console.log('订单列表查询成功', res);
+          const statusMap = {
+            'pending': '待处理',
+            'confirmed': '已确认',
+            'preparing': '制作中',
+            'completed': '已完成',
+            'cancelled': '已取消'
+          };
+          const orderList = res.data.map(item => ({
+            ...item,
+            statusText: statusMap[item.status] || '待处理'
+          }));
+          this.setData({
+            orderList: orderList,
+            orderLoading: false
+          });
+        },
+        fail: err => {
+          console.error('订单列表查询失败', err);
+          // 尝试从本地缓存加载
+          this.loadOrderListFromCache();
+        }
+      });
+  },
+
+  // 从本地缓存加载订单列表（备用方案）
+  loadOrderListFromCache() {
+    const cachedOrders = wx.getStorageSync('orderCache') || [];
+    const statusMap = {
+      'pending': '待处理',
+      'confirmed': '已确认',
+      'preparing': '制作中',
+      'completed': '已完成',
+      'cancelled': '已取消'
+    };
+    const orderList = cachedOrders.map((item, index) => ({
+      ...item,
+      _id: 'cache_' + index,
+      statusText: statusMap[item.status] || '待处理'
+    }));
+    this.setData({
+      orderList: orderList,
+      orderLoading: false
+    });
+  },
+
+  // 点击订单跳转到订单详情
+  goToOrderDetail(e) {
+    const orderNo = e.currentTarget.dataset.orderNo;
+    const id = e.currentTarget.dataset.id;
+    wx.navigateTo({
+      url: `/pages/order-detail/order-detail?orderNo=${orderNo}&id=${id}`
+    });
   },
 
   // 从云开发数据库加载分类数据
@@ -29,6 +133,7 @@ Page({
 
     // 使用云数据库获取数据
     const db = wx.cloud.database();
+    const _ = db.command;
     const menuCollection = db.collection('menu_config');
 
     menuCollection.get({
@@ -48,11 +153,9 @@ Page({
           });
 
           wx.hideLoading();
-          wx.showToast({
-            title: '加载成功',
-            icon: 'success',
-            duration: 1500
-          });
+
+          // 加载近一个月的销量数据
+          this.loadSalesData();
           
           // 延迟更新分类位置
           setTimeout(() => {
@@ -94,6 +197,67 @@ Page({
     });
   },
 
+  // 加载近一个月的销量数据
+  loadSalesData() {
+    const db = wx.cloud.database();
+    const _ = db.command;
+    
+    // 计算一个月前的时间
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    
+    console.log('查询近一个月订单，起始时间:', oneMonthAgo);
+    
+    // 查询近一个月且未取消的订单
+    db.collection('orders')
+      .where({
+        createTime: _.gte(oneMonthAgo),
+        status: _.neq('cancelled')
+      })
+      .limit(100)
+      .get({
+        success: res => {
+          console.log('销量查询成功，订单数:', res.data.length);
+          
+          // 统计每个商品的销量
+          const salesMap = {};
+          res.data.forEach(order => {
+            if (order.items && Array.isArray(order.items)) {
+              order.items.forEach(item => {
+                const id = item.id;
+                if (!salesMap[id]) {
+                  salesMap[id] = 0;
+                }
+                salesMap[id] += (item.cartCount || 1);
+              });
+            }
+          });
+          
+          console.log('商品销量统计:', salesMap);
+          
+          // 更新 categories 中的销量数据
+          const categories = this.data.categories.map(cate => ({
+            ...cate,
+            goodsList: cate.goodsList.map(goods => ({
+              ...goods,
+              sales: salesMap[goods.id] || 0
+            }))
+          }));
+          
+          this.setData({ categories });
+          
+          // 更新分类位置
+          setTimeout(() => {
+            this.updateCategoryTops();
+          }, 300);
+        },
+        fail: err => {
+          console.error('销量查询失败', err);
+          // 查询失败不影响正常使用，保持原有销量
+        }
+      });
+  },
+
   // 加载本地备用数据
   loadLocalData() {
     console.log('使用本地备用数据');
@@ -128,6 +292,9 @@ Page({
       icon: 'success',
       duration: 2000
     });
+
+    // 加载近一个月的销量数据
+    this.loadSalesData();
 
     // 延迟更新分类位置
     setTimeout(() => {

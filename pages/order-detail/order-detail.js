@@ -116,7 +116,7 @@ Page({
 
   // 跳转到首页
   goHome() {
-    wx.switchTab({
+    wx.reLaunch({
       url: '/pages/menu/menu'
     })
   },
