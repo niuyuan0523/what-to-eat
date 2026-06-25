@@ -1,0 +1,109 @@
+<view class="order-detail-page">
+  <!-- 加载中状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <van-loading type="spinner" color="#07c160" size="40px">加载中...</van-loading>
+  </view>
+
+  <!-- 订单详情 -->
+  <view class="detail-container" wx:if="{{!loading && orderDetail}}">
+    <!-- 订单状态 -->
+    <view class="status-section">
+      <view class="status-icon">
+        <van-icon name="success" color="#07c160" size="60px" />
+      </view>
+      <text class="status-text">{{orderStatus}}</text>
+      <text class="order-no">订单号: {{orderNo}}</text>
+    </view>
+
+    <!-- 订单信息 -->
+    <view class="info-section">
+      <van-cell-group>
+        <van-cell 
+          title="下单时间" 
+          value="{{orderDetail.orderTime}}"
+          value-class="value-text"
+        />
+        <van-cell 
+          title="订单状态" 
+          value="{{orderStatus}}"
+          value-class="value-text"
+        />
+        <van-cell 
+          title="商品数量" 
+          value="{{orderDetail.cartCount}}件"
+          value-class="value-text"
+        />
+        <van-cell 
+          title="订单总额" 
+          value="￥{{orderDetail.totalPrice}}"
+          value-class="price-text"
+        />
+      </van-cell-group>
+    </view>
+
+    <!-- 商品列表 -->
+    <view class="goods-section">
+      <view class="section-title">商品详情</view>
+      <view class="goods-list">
+        <van-card
+          wx:for="{{orderDetail.items}}"
+          wx:key="id"
+          title="{{item.name}}"
+          desc="{{item.spec || '常规规格'}}"
+          price="{{item.price}}"
+          thumb="{{item.image}}"
+          thumb-mode="aspectFill"
+          num="{{item.cartCount}}"
+        />
+      </view>
+    </view>
+
+    <!-- 温馨提示 -->
+    <view class="tips-section">
+      <van-icon name="info-o" color="#07c160" size="20px" />
+      <text class="tips-text">感谢您的购买，如有任何问题请联系客服</text>
+    </view>
+
+    <!-- 底部按钮 -->
+    <view class="bottom-buttons">
+      <van-button 
+        type="default" 
+        size="large"
+        plain
+        round
+        icon="home-o"
+        bindtap="goHome"
+      >
+        返回首页
+      </van-button>
+      <van-button 
+        type="primary" 
+        size="large"
+        plain
+        round
+        icon="replay"
+        bindtap="refreshOrder"
+      >
+        刷新订单
+      </van-button>
+    </view>
+  </view>
+
+  <!-- 订单不存在 -->
+  <view class="empty-container" wx:if="{{!loading && !orderDetail}}">
+    <van-empty 
+      description="订单不存在"
+      image="error"
+    >
+      <van-button 
+        type="primary" 
+        size="small"
+        plain
+        round
+        bindtap="goBack"
+      >
+        返回
+      </van-button>
+    </van-empty>
+  </view>
+</view>

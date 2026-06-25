@@ -3,6 +3,7 @@
   <view class="header">
     <text class="title">数据管理后台</text>
     <view class="actions">
+      <button class="btn btn-small" bindtap="getAdminOpenId">获取 OpenID</button>
       <button class="btn btn-small" bindtap="exportData">导出数据</button>
       <button class="btn btn-small btn-primary" bindtap="importData">导入数据</button>
     </view>

@@ -419,6 +419,50 @@ Page({
     });
   },
 
+  // 生成订单号
+  generateOrderNo() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `${year}${month}${day}${hours}${minutes}${seconds}${random}`;
+  },
+
+  // 获取订单商品详情摘要（用于订阅消息，最多20个字符）
+  getOrderDetail() {
+    const cartItems = this.data.cartItems;
+    
+    if (cartItems.length === 1) {
+      // 只有一个商品，显示商品名称和数量
+      const item = cartItems[0];
+      return `${item.name} x${item.cartCount}`.substring(0, 20);
+    } else if (cartItems.length > 1) {
+      // 多个商品，显示第一个商品名称 + “等X件商品”
+      const firstName = cartItems[0].name;
+      const summary = `${firstName}等${cartItems.length}件商品`;
+      return summary.substring(0, 20);
+    }
+    
+    return '';
+  },
+
+  // 获取完整的订单详情（用于日志和数据库保存）
+  getFullOrderDetail() {
+    const cartItems = this.data.cartItems;
+    let detail = '';
+    cartItems.forEach((item, index) => {
+      detail += `${item.name} x${item.cartCount}`;
+      if (index < cartItems.length - 1) {
+        detail += '\n';
+      }
+    });
+    return detail;
+  },
+
   // 结算
   onCheckout() {
     if (this.data.cartCount === 0) {
@@ -430,16 +474,123 @@ Page({
       content: `共 ${this.data.cartCount} 件商品，合计 ￥${this.data.totalPrice.toFixed(2)}`,
       success: (res) => {
         if (res.confirm) {
-          wx.showToast({
-            title: '订单已提交',
-            icon: 'success',
-            duration: 2000
-          });
-          // 清空购物车
-          this.clearCart();
+          this.submitOrder();
         }
       }
     });
+  },
+
+  // 提交订单并发送订单通知
+  submitOrder() {
+    const orderNo = this.generateOrderNo();
+    const productName = this.getOrderDetail(); // 简短商品名称（用于订阅消息，最多20字符）
+    const fullOrderDetail = this.getFullOrderDetail(); // 完整订单详情（用于日志）
+    const totalPrice = this.data.totalPrice.toFixed(2);
+    const cartCount = this.data.cartCount;
+    
+    console.log('订单信息:', { orderNo, productName, fullOrderDetail, totalPrice, cartCount });
+    
+    // 直接发送订单通知（不再请求用户授权订阅）
+    this.sendOrderNotice(orderNo, productName, totalPrice, cartCount);
+  },
+
+  // 发送订单通知给管理员（通过云函数）
+  sendOrderNotice(orderNo, orderDetail, totalPrice, cartCount) {
+    wx.showLoading({ title: '提交中...' });
+    
+    // 获取当前时间（格式：YYYY-MM-DD HH:mm:ss）
+    const now = new Date();
+    const orderTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    
+    // 获取购物车中的商品列表（包含完整信息）
+    const items = this.data.cartItems.map(item => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      cartCount: item.cartCount,
+      image: item.image || '',
+      spec: item.spec || '常规规格'
+    }));
+    
+    console.log('订单时间:', orderTime);
+    console.log('商品列表:', items);
+    
+    // 调用云函数发送订阅消息
+    wx.cloud.callFunction({
+      name: 'sendOrderNotice',
+      data: {
+        orderNo: orderNo,
+        orderDetail: orderDetail,
+        items: items, // 传递完整的商品列表
+        totalPrice: totalPrice,
+        cartCount: cartCount,
+        orderTime: orderTime
+        // templateId 在云函数中配置
+      },
+      success: res => {
+        console.log('订阅消息发送成功:', res);
+        wx.hideLoading();
+        this.orderSubmitSuccess();
+      },
+      fail: err => {
+        console.error('订阅消息发送失败:', err);
+        wx.hideLoading();
+        // 即使发送失败，订单仍然提交成功
+        this.orderSubmitSuccess();
+      }
+    });
+  },
+
+  // 订单提交成功处理
+  orderSubmitSuccess() {
+    wx.showToast({
+      title: '订单已提交',
+      icon: 'success',
+      duration: 2000
+    });
+    // 保存订单信息到本地缓存（用于离线查看订单详情）
+    this.saveOrderToCache();
+    // 清空购物车
+    this.clearCart();
+  },
+
+  // 保存订单信息到本地缓存
+  saveOrderToCache() {
+    const orderNo = this.generateOrderNo();
+    const orderDetail = this.getFullOrderDetail();
+    const items = this.data.cartItems.map(item => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      cartCount: item.cartCount,
+      image: item.image,
+      spec: item.spec || '常规规格'
+    }));
+    
+    const now = new Date();
+    const orderTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    
+    const orderData = {
+      orderNo: orderNo,
+      orderDetail: orderDetail,
+      items: items,
+      totalPrice: this.data.totalPrice.toFixed(2),
+      cartCount: this.data.cartCount,
+      orderTime: orderTime,
+      status: 'pending'
+    };
+    
+    // 获取缓存的订单列表
+    const cachedOrders = wx.getStorageSync('orderCache') || [];
+    // 添加新订单
+    cachedOrders.unshift(orderData);
+    // 只保留最近50个订单
+    if (cachedOrders.length > 50) {
+      cachedOrders.length = 50;
+    }
+    // 保存缓存
+    wx.setStorageSync('orderCache', cachedOrders);
+    console.log('订单已保存到缓存', orderData);
   },
 
   // 页面加载完成后计算分类位置
@@ -475,8 +626,8 @@ Page({
     console.log('新的计数:', newCount);
   
     // 达到 5 次点击，进入管理后台
-    if (newCount >= 5) {
-      console.log('达到5次，进入管理后台');
+    if (newCount >= 10) {
+      console.log('达到10次，进入管理后台');
       wx.showToast({
         title: '进入管理后台',
         icon: 'success',
@@ -516,7 +667,7 @@ Page({
     });
     
     // 显示点击提示（可选）
-    if (newCount >= 4) {
+    if (newCount >= 9) {
       wx.showToast({
         title: `${5 - newCount} 次后进入管理`,
         icon: 'none',

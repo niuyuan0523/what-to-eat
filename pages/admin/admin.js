@@ -365,6 +365,58 @@ Page({
     })
   },
 
+  // 获取管理员 OpenID
+  getAdminOpenId() {
+    wx.showLoading({ title: '获取中...' })
+    
+    wx.cloud.callFunction({
+      name: 'getOpenId',
+      success: res => {
+        console.log('获取 OpenID 成功', res)
+        wx.hideLoading()
+        
+        if (res.result && res.result.success) {
+          const openid = res.result.openid
+          
+          wx.showModal({
+            title: '管理员 OpenID',
+            content: openid,
+            confirmText: '复制',
+            showCancel: true,
+            cancelText: '关闭',
+            success: (modalRes) => {
+              if (modalRes.confirm) {
+                wx.setClipboardData({
+                  data: openid,
+                  success: () => {
+                    wx.showToast({
+                      title: '已复制到剪贴板',
+                      icon: 'success'
+                    })
+                  }
+                })
+              }
+            }
+          })
+        } else {
+          wx.showToast({
+            title: '获取失败',
+            icon: 'error'
+          })
+        }
+      },
+      fail: err => {
+        console.error('获取 OpenID 失败', err)
+        wx.hideLoading()
+        wx.showModal({
+          title: '获取失败',
+          content: `请确认云函数 getOpenId 已部署\n\n错误信息: ${err.errMsg}`,
+          showCancel: false
+        })
+      }
+    })
+  },
+
   // 阻止事件冒泡
   stopPropagation() {
     // 空函数，用于阻止事件冒泡

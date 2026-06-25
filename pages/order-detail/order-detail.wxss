@@ -1,0 +1,144 @@
+.order-detail-page {
+  min-height: 100vh;
+  background: #f7f8fa;
+  padding-bottom: 40rpx;
+}
+
+/* 加载中状态 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 60vh;
+}
+
+/* 订单详情容器 */
+.detail-container {
+  padding: 0 20rpx;
+}
+
+/* 订单状态区域 */
+.status-section {
+  background: linear-gradient(135deg, #07c160 0%, #059c53 100%);
+  border-radius: 24rpx;
+  padding: 60rpx 40rpx;
+  margin-bottom: 20rpx;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 8rpx 24rpx rgba(7, 193, 96, 0.2);
+}
+
+.status-icon {
+  margin-bottom: 20rpx;
+}
+
+.status-text {
+  display: block;
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 16rpx;
+}
+
+.order-no {
+  display: block;
+  font-size: 26rpx;
+  opacity: 0.9;
+}
+
+/* 订单信息区域 */
+.info-section {
+  background: #fff;
+  border-radius: 24rpx;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.value-text {
+  color: #666;
+  font-size: 28rpx;
+}
+
+.price-text {
+  color: #ff4400;
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+/* 商品列表区域 */
+.goods-section {
+  background: #fff;
+  border-radius: 24rpx;
+  margin-bottom: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 24rpx;
+  padding-left: 20rpx;
+  border-left: 6rpx solid #07c160;
+}
+
+.goods-list {
+  margin-top: 20rpx;
+}
+
+/* 温馨提示区域 */
+.tips-section {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 30rpx;
+  margin-bottom: 40rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.tips-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 底部按钮区域 */
+.bottom-buttons {
+  display: flex;
+  gap: 20rpx;
+  padding: 0 20rpx;
+}
+
+.bottom-buttons van-button {
+  flex: 1;
+}
+
+/* 空状态 */
+.empty-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 60vh;
+}
+
+/* 响应式设计 */
+@media (max-width: 750rpx) {
+  .status-section {
+    padding: 40rpx 30rpx;
+  }
+  
+  .status-text {
+    font-size: 32rpx;
+  }
+  
+  .order-no {
+    font-size: 24rpx;
+  }
+  
+  .bottom-buttons {
+    flex-direction: column;
+  }
+}

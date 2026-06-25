@@ -1,7 +1,8 @@
 {
   "pages": [
     "pages/menu/menu",
-    "pages/admin/admin"
+    "pages/admin/admin",
+    "pages/order-detail/order-detail"
   ],
   "window": {
     "backgroundTextStyle": "light",
