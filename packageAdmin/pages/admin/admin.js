@@ -1,3 +1,11 @@
+// 独立分包：用户直接进入本分包时不会执行 app.js，需在此初始化云开发环境
+if (wx.cloud) {
+  wx.cloud.init({
+    env: 'cloud1-d3g57caju929b77a5',
+    traceUser: true
+  });
+}
+
 const db = wx.cloud.database()
 const _ = db.command
 

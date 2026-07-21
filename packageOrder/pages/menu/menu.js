@@ -1,3 +1,11 @@
+// 独立分包：用户直接进入本分包时不会执行 app.js，需在此初始化云开发环境
+if (wx.cloud) {
+  wx.cloud.init({
+    env: 'cloud1-d3g57caju929b77a5',
+    traceUser: true
+  });
+}
+
 Page({
   data: {
     // 导航栏
@@ -17,10 +25,7 @@ Page({
     showCart: false,      // 是否显示购物车弹窗
     cartItems: [],        // 购物车商品列表
     totalPrice: 0,        // 购物车总价
-    categoryTops: [],      // 分类标题距离顶部的距离数组
-    adminClickCount: 0,   // 管理员入口点击计数
-    lastClickTime: 0,     // 上次点击时间
-    adminClickTimer: null // 计时器
+    categoryTops: []       // 分类标题距离顶部的距离数组
   },
 
   // 页面加载时从云数据库获取数据
@@ -126,7 +131,7 @@ Page({
     const orderNo = e.currentTarget.dataset.orderNo;
     const id = e.currentTarget.dataset.id;
     wx.navigateTo({
-      url: `/pages/order-detail/order-detail?orderNo=${orderNo}&id=${id}`
+      url: `/packageOrder/pages/order-detail/order-detail?orderNo=${orderNo}&id=${id}`
     });
   },
 
@@ -772,88 +777,5 @@ Page({
     setTimeout(() => {
       this.updateCategoryTops();
     }, 500); // 延迟 500ms 确保 DOM 已渲染完成
-  },
-
-  // 隐藏的管理员入口：连续点击分类标题 5 次进入管理后台
-  onCategoryTitleTap(e) {
-    const currentTime = Date.now();
-    const { adminClickCount, lastClickTime, adminClickTimer } = this.data;
-    
-    console.log('点击分类标题，当前计数:', adminClickCount);
-    
-    // 清除之前的计时器
-    if (adminClickTimer) {
-      clearTimeout(adminClickTimer);
-    }
-    
-    // 如果两次点击间隔超过 2 秒，重置计数
-    if (lastClickTime > 0 && (currentTime - lastClickTime) > 2000) {
-      console.log('间隔超过2秒，重置计数');
-      this.setData({
-        adminClickCount: 1,
-        lastClickTime: currentTime
-      });
-      return;
-    }
-    
-    const newCount = adminClickCount + 1;
-    console.log('新的计数:', newCount);
-  
-    // 达到 5 次点击，进入管理后台
-    if (newCount >= 10) {
-      console.log('达到10次，进入管理后台');
-      wx.showToast({
-        title: '进入管理后台',
-        icon: 'success',
-        duration: 1500
-      });
-      
-      // 延迟跳转，让用户看到提示
-      setTimeout(() => {
-        wx.navigateTo({
-          url: '/pages/admin/admin'
-        });
-      }, 500);
-      
-      // 重置计数
-      this.setData({
-        adminClickCount: 0,
-        lastClickTime: 0,
-        adminClickTimer: null
-      });
-      return;
-    }
-    
-    // 更新计数，并设置 2 秒后重置
-    const timer = setTimeout(() => {
-      console.log('2秒后重置计数');
-      this.setData({
-        adminClickCount: 0,
-        lastClickTime: 0,
-        adminClickTimer: null
-      });
-    }, 2000);
-    
-    this.setData({
-      adminClickCount: newCount,
-      lastClickTime: currentTime,
-      adminClickTimer: timer
-    });
-    
-    // 显示点击提示（可选）
-    if (newCount >= 9) {
-      wx.showToast({
-        title: `${5 - newCount} 次后进入管理`,
-        icon: 'none',
-        duration: 1000
-      });
-    }
-  },
-
-  // 跳转到管理后台（保留以便其他方式使用）
-  goToAdmin() {
-    wx.navigateTo({
-      url: '/pages/admin/admin'
-    });
   }
 });

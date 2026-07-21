@@ -1,13 +1,30 @@
 {
   "pages": [
-    "pages/menu/menu",
-    "pages/admin/admin",
-    "pages/order-detail/order-detail"
+    "pages/index/index"
+  ],
+  "subPackages": [
+    {
+      "root": "packageOrder",
+      "name": "order",
+      "independent": true,
+      "pages": [
+        "pages/menu/menu",
+        "pages/order-detail/order-detail"
+      ]
+    },
+    {
+      "root": "packageAdmin",
+      "name": "admin",
+      "independent": true,
+      "pages": [
+        "pages/admin/admin"
+      ]
+    }
   ],
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#fff",
-    "navigationBarTitleText": "WeChat",
+    "navigationBarTitleText": "吃什么",
     "navigationBarTextStyle": "black"
   },
   "sitemapLocation": "sitemap.json"

@@ -1,3 +1,11 @@
+// 独立分包：用户直接进入本分包时不会执行 app.js，需在此初始化云开发环境
+if (wx.cloud) {
+  wx.cloud.init({
+    env: 'cloud1-d3g57caju929b77a5',
+    traceUser: true
+  });
+}
+
 const db = wx.cloud.database()
 
 Page({
@@ -117,8 +125,8 @@ Page({
   // 跳转到首页
   goHome() {
     wx.reLaunch({
-      url: '/pages/menu/menu'
-    })
+      url: '/pages/index/index'
+    });
   },
 
   // 分享订单
@@ -126,7 +134,7 @@ Page({
     const { orderNo, orderDetail } = this.data
     return {
       title: `我的订单 #${orderNo}`,
-      path: `/pages/order-detail/order-detail?orderNo=${orderNo}`
+      path: `/packageOrder/pages/order-detail/order-detail?orderNo=${orderNo}`
     }
   }
 })

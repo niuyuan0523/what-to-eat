@@ -130,6 +130,7 @@ page {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
 }
 .card-info .van-card__bottom{
   display: flex;

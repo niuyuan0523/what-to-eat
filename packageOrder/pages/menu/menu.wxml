@@ -50,7 +50,7 @@
         bindscroll="onGoodsScroll"
       >
         <view class="category-group" wx:for="{{categories}}" wx:key="id" id="{{item.id}}">
-          <view class="category-title" bindtap="onCategoryTitleTap">{{item.name}}</view>
+          <view class="category-title">{{item.name}}</view>
           
           <!-- 使用 van-card 展示商品 -->
           <van-card 
@@ -59,7 +59,7 @@
             wx:key="id"
             title="{{goods.name}}"
             desc="{{goods.desc}}"
-            price="{{goods.price}}"
+            price="{{goods.price > 0 ? goods.price : ''}}"
             original-price="{{goods.originalPrice > goods.price ? goods.originalPrice : ''}}"
             thumb="{{goods.image}}"
             tag="{{goods.sales>0 ? '月售 ' + goods.sales : ''}}"

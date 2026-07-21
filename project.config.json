@@ -10,7 +10,11 @@
     "packNpmRelationList": [
       {
         "packageJsonPath": "./package.json",
-        "miniprogramNpmDistDir": "./"
+        "miniprogramNpmDistDir": "packageOrder/"
+      },
+      {
+        "packageJsonPath": "./package.json",
+        "miniprogramNpmDistDir": "packageAdmin/"
       }
     ],
     "babelSetting": {
