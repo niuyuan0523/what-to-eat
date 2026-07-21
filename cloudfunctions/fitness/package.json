@@ -1,0 +1,11 @@
+{
+  "name": "fitness",
+  "version": "1.0.0",
+  "description": "健身打卡数据服务（记录/统计）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  },
+  "author": "",
+  "license": "ISC"
+}

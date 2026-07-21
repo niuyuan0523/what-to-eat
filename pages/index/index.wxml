@@ -19,6 +19,15 @@
       <view class="module-arrow">›</view>
     </view>
 
+    <view class="module-card fitness" bindtap="goFitness">
+      <view class="module-icon">🏃</view>
+      <view class="module-info">
+        <view class="module-name">健身打卡</view>
+        <view class="module-sub">一键打卡 · 连续统计 · 勋章激励</view>
+      </view>
+      <view class="module-arrow">›</view>
+    </view>
+
     <view class="module-card admin" bindtap="goAdmin" wx:if="{{isAdmin}}">
       <view class="module-icon">⚙️</view>
       <view class="module-info">

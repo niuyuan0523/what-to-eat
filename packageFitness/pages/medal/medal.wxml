@@ -1,0 +1,31 @@
+<view class="page">
+
+  <!-- 概览 -->
+  <view class="overview">
+    <view class="ov-item">
+      <text class="ov-num">{{stats.currentStreak}}</text>
+      <text class="ov-label">当前连续</text>
+    </view>
+    <view class="ov-item">
+      <text class="ov-num">{{stats.bestStreak}}</text>
+      <text class="ov-label">最长连续</text>
+    </view>
+    <view class="ov-item">
+      <text class="ov-num">{{stats.earnedCount}}/{{stats.medals.length}}</text>
+      <text class="ov-label">已获勋章</text>
+    </view>
+  </view>
+
+  <!-- 勋章墙 -->
+  <view class="medal-grid">
+    <view class="medal-card {{item.earned ? 'earned' : 'locked'}}" wx:for="{{stats.medals}}" wx:key="days">
+      <text class="medal-icon">{{item.earned ? item.icon : '🔒'}}</text>
+      <text class="medal-name">{{item.name}}</text>
+      <text class="medal-desc">{{item.desc}}</text>
+      <text class="medal-status">{{item.earned ? '已获得' : '未解锁'}}</text>
+    </view>
+  </view>
+
+  <view class="tip">连续打卡即可解锁更高等级的勋章，加油！</view>
+
+</view>

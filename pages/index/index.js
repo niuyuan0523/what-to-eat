@@ -35,6 +35,13 @@ Page({
     });
   },
 
+  // 进入「健身打卡」模块（独立分包）
+  goFitness() {
+    wx.navigateTo({
+      url: '/packageFitness/pages/index/index'
+    });
+  },
+
   // 进入「后台管理」模块（独立分包）
   goAdmin() {
     wx.navigateTo({

@@ -1,0 +1,129 @@
+<view class="page">
+
+  <!-- 顶部：问候 + 核心统计 -->
+  <view class="hero">
+    <view class="hero-title">今天，动起来了吗？</view>
+    <view class="hero-date">{{todayLabel}}</view>
+    <view class="stat-row">
+      <view class="stat">
+        <text class="stat-num">{{stats.currentStreak}}</text>
+        <text class="stat-label">连续天数</text>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat">
+        <text class="stat-num">{{stats.totalCount}}</text>
+        <text class="stat-label">累计打卡</text>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat">
+        <text class="stat-num">{{stats.totalCalories}}</text>
+        <text class="stat-label">累计千卡</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 最醒目的一键打卡按钮 -->
+  <view class="checkin-wrap">
+    <view class="checkin-btn {{checkedToday ? 'done' : ''}}" bindtap="openPanel">
+      <text class="checkin-icon">{{checkedToday ? '✅' : '💪'}}</text>
+      <text class="checkin-text">{{checkedToday ? '今日已打卡' : '立即打卡'}}</text>
+      <text class="checkin-sub">{{checkedToday ? '再练一组也可以' : '点击开始记录'}}</text>
+    </view>
+  </view>
+
+  <!-- 快捷入口 -->
+  <view class="quick-row">
+    <view class="quick-item" bindtap="goCalendar">
+      <text class="quick-icon">📅</text>
+      <text class="quick-label">打卡日历</text>
+    </view>
+    <view class="quick-item" bindtap="goMedal">
+      <text class="quick-icon">🏅</text>
+      <text class="quick-label">我的勋章 {{stats.earnedCount}}</text>
+    </view>
+    <view class="quick-item" bindtap="sharePoster">
+      <text class="quick-icon">📤</text>
+      <text class="quick-label">分享成果</text>
+    </view>
+  </view>
+
+  <!-- 今日记录 -->
+  <view class="section">
+    <view class="section-title">今日记录</view>
+    <view wx:if="{{todayRecords.length === 0}}" class="empty">今天还没有打卡，快去动一动吧 ~</view>
+    <view wx:else class="record-list">
+      <view class="record-item" wx:for="{{todayRecords}}" wx:key="_id">
+        <text class="record-icon">{{item.icon}}</text>
+        <view class="record-info">
+          <text class="record-name">{{item.typeName}}</text>
+          <text class="record-time">{{item.timeLabel}}</text>
+        </view>
+        <view class="record-meta">
+          <text class="record-dur">{{item.duration}} 分钟</text>
+          <text class="record-cal">{{item.calories}} 千卡</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 勋章预览 -->
+  <view class="section" wx:if="{{earnedMedals.length > 0}}">
+    <view class="section-title">最新勋章</view>
+    <view class="medal-strip">
+      <view class="medal-chip" wx:for="{{earnedMedals}}" wx:key="days">
+        <text class="medal-chip-icon">{{item.icon}}</text>
+        <text class="medal-chip-name">{{item.name}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer-tip">数据已同步至云端 · 仅你可见</view>
+
+  <!-- 打卡面板 -->
+  <view class="mask {{showPanel ? 'show' : ''}}" bindtap="closePanel" catchtouchmove="noop"></view>
+  <view class="panel {{showPanel ? 'show' : ''}}">
+    <view class="panel-header">
+      <text class="panel-title">记录一次运动</text>
+      <text class="panel-close" bindtap="closePanel">✕</text>
+    </view>
+
+    <view class="panel-label">运动类型</view>
+    <view class="type-grid">
+      <view
+        class="type-item {{selectedType === item.key ? 'active' : ''}}"
+        wx:for="{{typeList}}"
+        wx:key="key"
+        data-key="{{item.key}}"
+        bindtap="selectType"
+      >
+        <text class="type-icon">{{item.icon}}</text>
+        <text class="type-name">{{item.name}}</text>
+      </view>
+    </view>
+
+    <view class="panel-label">运动时长（分钟）</view>
+    <view class="duration-row">
+      <view
+        class="dur-preset {{duration === item ? 'active' : ''}}"
+        wx:for="{{durationPresets}}"
+        wx:key="*this"
+        data-val="{{item}}"
+        bindtap="setDuration"
+      >{{item}}</view>
+    </view>
+    <view class="stepper-row">
+      <text class="step-btn" bindtap="decDuration">−</text>
+      <text class="step-val">{{duration}} 分钟</text>
+      <text class="step-btn" bindtap="incDuration">＋</text>
+    </view>
+
+    <view class="est">预计消耗 <text class="est-num">{{estCalories}}</text> 千卡</view>
+    <view class="confirm-btn {{submitting ? 'disabled' : ''}}" bindtap="confirmCheckin">
+      {{submitting ? '打卡中...' : '确认打卡'}}
+    </view>
+  </view>
+
+  <!-- 成果海报（离屏绘制） -->
+  <canvas type="2d" id="poster" class="poster-canvas"></canvas>
+
+</view>

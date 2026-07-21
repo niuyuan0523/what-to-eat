@@ -1,0 +1,50 @@
+<view class="page">
+
+  <!-- 月份切换 -->
+  <view class="cal-header">
+    <text class="nav-btn" bindtap="prevMonth">‹</text>
+    <text class="month-label">{{monthLabel}}</text>
+    <text class="nav-btn" bindtap="nextMonth">›</text>
+  </view>
+
+  <view class="month-summary">本月打卡 <text class="hl">{{monthDays}}</text> 天 · <text class="hl">{{monthCount}}</text> 次</view>
+
+  <!-- 星期表头 -->
+  <view class="week-head">
+    <text class="week-cell" wx:for="{{weekNames}}" wx:key="*this">{{item}}</text>
+  </view>
+
+  <!-- 日期网格 -->
+  <view class="grid">
+    <view
+      class="cell {{item.day ? '' : 'blank'}} {{item.checked ? 'checked' : ''}} {{item.isToday ? 'today' : ''}} {{item.date === selectedDate ? 'selected' : ''}}"
+      wx:for="{{cells}}"
+      wx:key="idx"
+      data-date="{{item.date}}"
+      bindtap="selectDay"
+    >
+      <text wx:if="{{item.day}}" class="cell-day">{{item.day}}</text>
+      <view wx:if="{{item.checked}}" class="dot"></view>
+    </view>
+  </view>
+
+  <!-- 选中日期详情 -->
+  <view class="detail">
+    <view class="detail-title">{{selectedLabel}}</view>
+    <view wx:if="{{selectedRecords.length === 0}}" class="empty">这一天没有打卡记录</view>
+    <view wx:else class="record-list">
+      <view class="record-item" wx:for="{{selectedRecords}}" wx:key="_id">
+        <text class="record-icon">{{item.icon}}</text>
+        <view class="record-info">
+          <text class="record-name">{{item.typeName}}</text>
+          <text class="record-time">{{item.timeLabel}}</text>
+        </view>
+        <view class="record-meta">
+          <text class="record-dur">{{item.duration}} 分钟</text>
+          <text class="record-cal">{{item.calories}} 千卡</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+</view>

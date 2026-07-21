@@ -12,6 +12,7 @@
 
 - **点单模块**（`packageOrder`）：浏览菜单、下单、查看订单
 - **后台管理模块**（`packageAdmin`）：菜单维护、数据管理
+- **健身打卡模块**（`packageFitness`）：一键打卡、打卡日历、连续统计、卡路里估算、电子勋章、成果分享
 
 > 独立分包不能引用主包资源（含 `miniprogram_npm`），因此各分包分别构建自己的 npm 依赖，并在页面模块顶部各自初始化云开发环境（`wx.cloud.init`）。
 
@@ -26,6 +27,11 @@
 ├── packageAdmin/                 # 独立分包：后台管理模块
 │   ├── pages/admin/              # 数据管理后台页
 │   └── miniprogram_npm/          # 分包 npm 依赖（构建后生成）
+├── packageFitness/               # 独立分包：健身打卡模块（纯原生组件，无需 npm）
+│   ├── pages/index/              # 打卡首页（一键打卡 + 统计 + 成果分享）
+│   ├── pages/calendar/           # 打卡日历（月历 + 当日详情）
+│   ├── pages/medal/              # 勋章墙
+│   └── utils/fitness.js          # 分包公共工具（类型/卡路里/统计/勋章）
 ├── cloudfunctions/               # 云函数目录
 ├── app.js                        # 小程序入口文件（初始化云环境）
 ├── app.json                      # 全局配置（pages + subPackages）

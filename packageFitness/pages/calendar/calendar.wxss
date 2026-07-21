@@ -1,0 +1,199 @@
+.page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 24rpx 24rpx calc(40rpx + env(safe-area-inset-bottom));
+  background: #f5f6f8;
+}
+
+/* 月份切换 */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 40rpx;
+}
+
+.nav-btn {
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  text-align: center;
+  font-size: 44rpx;
+  color: #ff7043;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+.month-label {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.month-summary {
+  text-align: center;
+  font-size: 26rpx;
+  color: #888;
+  margin-bottom: 20rpx;
+}
+
+.month-summary .hl {
+  color: #ff7043;
+  font-weight: 700;
+  margin: 0 4rpx;
+}
+
+/* 日历卡片 */
+.week-head {
+  display: flex;
+  background: #fff;
+  border-top-left-radius: 24rpx;
+  border-top-right-radius: 24rpx;
+  padding: 20rpx 0 10rpx;
+}
+
+.week-cell {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  background: #fff;
+  border-bottom-left-radius: 24rpx;
+  border-bottom-right-radius: 24rpx;
+  padding: 10rpx 0 24rpx;
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.04);
+}
+
+.cell {
+  width: calc(100% / 7);
+  height: 84rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.cell-day {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.cell.blank {
+  visibility: hidden;
+}
+
+.cell.checked .cell-day {
+  color: #ff7043;
+  font-weight: 700;
+}
+
+.cell.today .cell-day {
+  color: #fff;
+  background: #ff7043;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 50%;
+}
+
+.cell.selected {
+  background: #fff2ec;
+  border-radius: 12rpx;
+}
+
+.dot {
+  position: absolute;
+  bottom: 12rpx;
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #ff7043;
+}
+
+.cell.today .dot {
+  background: #ff7043;
+  bottom: 6rpx;
+}
+
+/* 详情 */
+.detail {
+  margin-top: 28rpx;
+  padding: 28rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.04);
+}
+
+.detail-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16rpx;
+}
+
+.empty {
+  padding: 30rpx 0;
+  text-align: center;
+  color: #b0b0b0;
+  font-size: 26rpx;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.record-item:last-child {
+  border-bottom: none;
+}
+
+.record-icon {
+  font-size: 44rpx;
+  width: 72rpx;
+  text-align: center;
+}
+
+.record-info {
+  flex: 1;
+  margin-left: 16rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.record-name {
+  font-size: 30rpx;
+  color: #1a1a1a;
+}
+
+.record-time {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #9a9a9a;
+}
+
+.record-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.record-dur {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.record-cal {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #ff7043;
+}
