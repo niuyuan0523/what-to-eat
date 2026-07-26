@@ -1,0 +1,69 @@
+<view class="page" bindtouchstart="onPress" bindtouchend="onRelease" bindtouchcancel="onRelease">
+
+  <!-- 游戏画布 -->
+  <canvas type="2d" id="game" class="game-canvas" disable-scroll="true"></canvas>
+
+  <!-- 计分板 -->
+  <view class="hud score-box" style="top: {{statusBarHeight + 12}}px;">
+    <view class="score">{{score}}</view>
+    <view class="best">最佳 {{best}} · {{diffLabel}}</view>
+  </view>
+
+  <!-- 连击提示 -->
+  <view class="hud combo-tag {{comboShow ? 'show' : ''}}" style="top: {{statusBarHeight + 16}}px;">{{comboText}}</view>
+
+  <!-- 蓄力条 -->
+  <view class="hud power-wrap {{powerShow ? 'show' : ''}}">
+    <view class="power-bar" style="width: {{powerPct}}%;"></view>
+  </view>
+
+  <!-- 收集槽 -->
+  <view class="hud tray">
+    <view
+      wx:for="{{traySlots}}"
+      wx:key="index"
+      class="slot {{item.filled ? 'filled' : ''}} {{item.clearing ? 'clearing' : ''}}"
+    >{{item.icon}}</view>
+  </view>
+
+  <!-- 返回主页：catchtouchstart/end 阻断冒泡，避免按下时误触发蓄力跳跃 -->
+  <view class="back-home" catchtap="onBackHome" catchtouchstart="noop" catchtouchend="noop">← 返回主页</view>
+
+  <!-- 开始界面 -->
+  <view class="overlay" wx:if="{{phase === 'start'}}">
+    <view class="title">方块跳跳消</view>
+    <view class="sub">按压蓄力跳跃 × 堆叠消除 · 3 秒开局</view>
+    <view class="rules">
+      <view>🕹️ <text class="hl">按住</text>屏幕蓄力，<text class="hl">松开</text>起跳</view>
+      <view>✨ 落到<text class="hl">相同图案</text>的平台 → 直接消除得高分</view>
+      <view>📥 不同图案会进入下方<text class="hl">收集槽</text>，凑满 <text class="hl">3 个相同</text>自动消除</view>
+      <view>⚠️ 收集槽<text class="hl">装满 7 格</text>或<text class="hl">落空坠落</text>，游戏结束</view>
+    </view>
+    <view class="diff-row">
+      <view class="btn diff-btn easy" data-diff="easy" catchtap="onSelectDiff">
+        <text>🌱 初级</text>
+        <text class="diff-sub">平台固定高度</text>
+      </view>
+      <view class="btn diff-btn medium" data-diff="medium" catchtap="onSelectDiff">
+        <text>⛰️ 中级</text>
+        <text class="diff-sub">平台高低错落</text>
+      </view>
+      <view class="btn diff-btn hard" data-diff="hard" catchtap="onSelectDiff">
+        <text>🌊 高级</text>
+        <text class="diff-sub">平台自动升降</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 结束界面 -->
+  <view class="overlay" wx:if="{{phase === 'over'}}">
+    <view class="over-reason">{{overReason}}</view>
+    <view class="over-score">{{overScore}}</view>
+    <view class="over-best">{{overBest}}</view>
+    <view class="btn-row">
+      <view class="btn" catchtap="onRetry">再来一局</view>
+      <view class="btn ghost" catchtap="onBackMenu">选难度</view>
+    </view>
+  </view>
+
+</view>

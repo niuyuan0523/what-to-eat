@@ -1,5 +1,5 @@
 {
-  "miniprogramRoot": "./",
+  "miniprogramRoot": "",
   "cloudfunctionRoot": "cloudfunctions/",
   "setting": {
     "es6": true,
@@ -41,6 +41,9 @@
     "include": []
   },
   "appid": "wx2fc92ca5c1910626",
-  "editorSetting": {},
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
   "libVersion": "3.15.1"
 }

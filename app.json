@@ -29,6 +29,14 @@
         "pages/calendar/calendar",
         "pages/medal/medal"
       ]
+    },
+    {
+      "root": "packageGame",
+      "name": "game",
+      "independent": true,
+      "pages": [
+        "pages/block-jump/block-jump"
+      ]
     }
   ],
   "window": {

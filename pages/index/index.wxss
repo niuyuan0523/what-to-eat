@@ -69,6 +69,10 @@
   background: #fff2ec;
 }
 
+.module-card.game .module-icon {
+  background: #f3ecff;
+}
+
 .module-info {
   flex: 1;
   margin-left: 28rpx;

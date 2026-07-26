@@ -42,6 +42,13 @@ Page({
     });
   },
 
+  // 进入「方块跳跳消」小游戏（独立分包）
+  goGame() {
+    wx.navigateTo({
+      url: '/packageGame/pages/block-jump/block-jump'
+    });
+  },
+
   // 进入「后台管理」模块（独立分包）
   goAdmin() {
     wx.navigateTo({
