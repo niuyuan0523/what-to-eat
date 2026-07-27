@@ -65,6 +65,8 @@ Page({
     combo: 0,
     holeNo: 1,
     distLabel: '',
+    windLabel: '',             // 风力显示：无风 / 顺风·逆风 x 级
+    windCls: '',               // tail=顺风(绿) head=逆风(红)
     angleDeg: 45,
     powerShow: false,
     powerPct: 0,
@@ -132,6 +134,11 @@ Page({
     this.particles = []; this.popups = [];
     this.ball = { x: 0, y: 0, vx: 0, vy: 0, spin: 0 };
     this.camX = 0;             // 相机水平偏移：球越过屏幕右缘时跟随，保证球与洞同屏
+    // 真实高尔夫要素：风力 / 沙坑 / 水塘 / 3 杆制（beginHole 按洞数渐进生成）
+    this.wind = 0; this.windLv = 0;
+    this.bunker = null; this.water = null;
+    this.sandLie = false;      // 球停在沙坑里：下一杆力量打折
+    this.maxStrokes = 3;
     this.trail = [];
     this.helper = null;
 
@@ -192,11 +199,8 @@ Page({
 
         this.measureDial();
 
-        // 云朵/星星装饰
-        this.decos = [];
-        for (let i = 0; i < 6; i++) {
-          this.decos.push({ x: rand(0, this.vw), y: rand(20, this.vh * 0.3), r: rand(14, 34), spd: rand(3, 9) });
-        }
+        // 按当前皮肤生成专属背景装饰（云/星/楼群/仙人掌/环形山……）
+        this.buildDecos();
 
         this.lastT = now();
         const loop = () => {
@@ -276,6 +280,10 @@ Page({
   sfxLuck() { [880, 1109, 1319, 1760, 2217].forEach((f, i) => setTimeout(() => this.beep(f, .12, 'sine', .15), i * 70)); },
   // 飞出屏幕滑稽下滑
   sfxOut() { this.beep(500, .5, 'sawtooth', .13, -380); },
+  // 陷进沙坑的闷"噗"
+  sfxSand() { this.noiseBurst(300, .18, .3, 120); },
+  // 落水"扑通"
+  sfxSplash() { this.beep(300, .25, 'sine', .2, -180); this.noiseBurst(900, .35, .35, 300); },
   // UI 点击
   sfxClick() { this.beep(600, .07, 'triangle', .12, 120); },
   // 慢放"咔哒"胶片声
@@ -322,9 +330,11 @@ Page({
     const rng = this.mode === 'daily' ? this.dailyRng : Math.random;
     const d = (0.4 + rng() * 0.38) * this.vw;              // 洞距：0.4 ~ 0.78 屏宽（任何机型都不触发下方 clamp，每日一洞全机型一致）
     this.holeX = clamp(this.ballX0 + d, 0, this.vw - 36 * this.S);
+    this.genHazards(rng);                                  // 风力 / 沙坑 / 水塘（随洞数渐进）
     this.ball.x = this.ballX0; this.ball.y = this.groundY;
     this.ball.vx = 0; this.ball.vy = 0; this.ball.spin = 0;
     this.strokes = 1;
+    this.sandLie = false;
     this.trail = [];
     this.trailAcc = 0;
     this.helper = null;
@@ -335,9 +345,57 @@ Page({
     this.setData({
       holeNo: this.holeIdx + 1,
       distLabel: Math.round((this.holeX - this.ballX0) / (7 * this.S)) + ' 码',
-      strokeTip: '第 1 杆',
+      strokeTip: '第 1/' + this.maxStrokes + ' 杆',
+      windLabel: this.windText(),
+      windCls: this.windLv === 0 ? '' : this.wind > 0 ? 'tail' : 'head',
       powerShow: false, powerPct: 0
     });
+  },
+
+  // 真实高尔夫要素：按洞数渐进生成风与障碍。
+  // rng 可传每日种子随机（调用次数固定为 9 次，保证全服同一布局）
+  genHazards(rng) {
+    const idx = this.holeIdx, S = this.S;
+    // 风：第 1~2 洞 ≤1 级，3~4 洞 ≤2 级，之后 ≤3 级；正=顺风(向洞)
+    const maxLv = idx < 2 ? 1 : idx < 4 ? 2 : 3;
+    this.windLv = Math.floor(rng() * (maxLv + 1));
+    const dir = rng() < 0.5 ? -1 : 1;
+    this.wind = dir * this.windLv * 58 * S;                // 横向加速度 px/s²
+
+    // 障碍概率随洞数上升；第 7 洞起沙坑水塘可同时出现
+    const pBunker = idx < 2 ? 0 : idx < 4 ? 0.3 : idx < 6 ? 0.5 : 0.6;
+    const pWater = idx < 4 ? 0 : idx < 6 ? 0.3 : 0.4;
+    // 固定消耗 rng：命中与否都取值，保证每日种子序列全服一致
+    const rB = rng(), wB = (60 + rng() * 30) * S, sB = rng(), pB = rng();
+    const rW = rng(), wW = (70 + rng() * 40) * S, sW = rng(), pW = rng();
+    this.bunker = rB < pBunker ? this.placeZone(wB, sB, pB, null) : null;
+    let water = rW < pWater ? this.placeZone(wW, sW, pW, this.bunker) : null;
+    if (water && idx < 6 && this.bunker) water = null;     // 第 7 洞前二者不同时出现
+    this.water = water;
+  },
+
+  // 在球洞之间 / 洞后方选一段障碍区，避开洞口 3 倍洞半径与已有障碍
+  placeZone(w, side, pos, avoid) {
+    const S = this.S, safe = this.holeR * 3;
+    const gapLo = this.ballX0 + 70 * S, gapHi = this.holeX - safe;
+    const backLo = this.holeX + safe, backHi = this.vw - 16;
+    let lo, hi;
+    if (side < 0.65 && gapHi - gapLo > w + 20) { lo = gapLo; hi = gapHi; }
+    else if (backHi - backLo > w + 20) { lo = backLo; hi = backHi; }
+    else if (gapHi - gapLo > w + 20) { lo = gapLo; hi = gapHi; }
+    else return null;
+    const x0 = lo + pos * (hi - lo - w);
+    const z = { x0, x1: x0 + w };
+    // 与已有障碍重叠则放弃（布局仍然全服确定）
+    if (avoid && z.x1 > avoid.x0 - 16 && z.x0 < avoid.x1 + 16) return null;
+    return z;
+  },
+
+  inZone(z, x) { return !!z && x >= z.x0 && x <= z.x1; },
+
+  windText() {
+    if (!this.windLv) return '🍃 无风';
+    return '💨 ' + (this.wind > 0 ? '顺风 →' : '← 逆风') + ' ' + this.windLv + ' 级';
   },
 
   // ==================== 输入：瞄准 + 蓄力 ====================
@@ -394,7 +452,8 @@ Page({
 
     // 满力射程随皮肤重力换算（45° 约 1.06 屏）：避免月球低重力下大半力量区间必然飞出屏幕
     const vMax = Math.sqrt(this.g * this.vw * 1.06);
-    const v = vMax * 0.3 + p * vMax * 0.7;
+    let v = vMax * 0.3 + p * vMax * 0.7;
+    if (this.sandLie) { v *= 0.75; this.sandLie = false; }   // 沙坑救球：出杆力量打七五折
     const a = this.data.angleDeg * Math.PI / 180;
     // 第 2 杆若已越过球洞，自动反向朝洞打
     this.dir = this.holeX >= this.ball.x ? 1 : -1;
@@ -450,10 +509,12 @@ Page({
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.vy += this.g * dt;
+      b.vx += this.wind * dt;                              // 横风持续吹偏弹道
       b.spin += b.vx * dt * 0.06;
 
       if (b.y >= this.groundY) {
         b.y = this.groundY;
+        if (this.inZone(this.water, b.x)) return this.splashIn();   // 落水：罚杆捞回岸边
         const nearHole = Math.abs(b.x - this.holeX);
         if (this.forceHole && nearHole < this.holeR * 2) return this.holeIn();
         if (nearHole < this.holeR * 0.85) return this.holeIn();        // 直接飞进洞口
@@ -463,7 +524,14 @@ Page({
           this.sfxLip();
           this.popups.push({ x: b.x, y: b.y - 46, text: '擦洞而过！', color: '#f87171', life: 1 });
         }
-        if (Math.abs(b.vy) > 130) {
+        if (this.inZone(this.bunker, b.x) && Math.abs(b.vy) > 90) {
+          // 沙坑吃掉弹跳：扬沙闷响，球几乎原地陷住
+          this.sfxSand();
+          this.spawnParticles(b.x, b.y, 'rgba(214,178,110,.9)', 8);
+          b.vy = -b.vy * 0.15;
+          b.vx *= 0.4;
+          if (Math.abs(b.vy) < 100) { b.vy = 0; this.state = 'rolling'; }
+        } else if (Math.abs(b.vy) > 130) {
           this.sfxBounce(Math.abs(b.vy));
           b.vy = -b.vy * 0.42;
           b.vx *= 0.72;
@@ -477,6 +545,7 @@ Page({
       const prevX = b.x;
       b.x += b.vx * dt;
       b.spin += b.vx * dt * 0.14;
+      if (this.inZone(this.water, b.x)) return this.splashIn();   // 滚进水塘同样罚杆
       // 滚过洞口：慢速掉洞，快速擦边越过
       const crossed = (prevX - this.holeX) * (b.x - this.holeX) <= 0 || Math.abs(b.x - this.holeX) < this.holeR * 0.9;
       if (crossed) {
@@ -488,7 +557,8 @@ Page({
           this.popups.push({ x: b.x, y: b.y - 40, text: '速度太快了！', color: '#f87171', life: 1 });
         }
       }
-      const dec = this.fric * dt;
+      // 沙坑内滚动阻力翻 4 倍，球很快陷停
+      const dec = this.fric * (this.inZone(this.bunker, b.x) ? 4 : 1) * dt;
       if (Math.abs(b.vx) <= dec + 8) { b.vx = 0; return this.ballStopped(); }
       b.vx -= Math.sign(b.vx) * dec;
     }
@@ -508,6 +578,38 @@ Page({
   },
 
   // ==================== 结果判定 ====================
+  // 落水：水花 + 罚 10 分并消耗一杆，球捞回近岸重打；杆数用完按 Bogey 收场
+  splashIn() {
+    const b = this.ball;
+    this.sfxSplash();
+    this.spawnParticles(b.x, this.groundY, 'rgba(96,165,250,.9)', 18);
+    this.popups.push({ x: b.x, y: this.groundY - 60, text: '💦 落水 -10', color: '#60a5fa', life: 1.2 });
+    this.sessionScore -= 10;
+    this.stats.total -= 10;
+    this.statsDirty = true;
+    this.setData({ score: this.sessionScore, total: this.stats.total });
+    b.vx = 0; b.vy = 0; b.y = this.groundY;
+    this.state = 'wait';
+    const tk = this.playToken;
+    if (this.strokes >= this.maxStrokes) {
+      setTimeout(() => {
+        if (this.destroyed || tk !== this.playToken) return;
+        this.settle('stop');                               // 没杆了：Bogey 收场
+      }, 700);
+      return;
+    }
+    this.strokes++;
+    setTimeout(() => {
+      if (this.destroyed || tk !== this.playToken || this.data.phase !== 'playing') return;
+      b.x = Math.max(20, this.water.x0 - 24 * this.S);     // 捞回近岸边缘
+      b.y = this.groundY;
+      this.sandLie = false;
+      this.state = 'aim';
+      this.setData({ strokeTip: '第 ' + this.strokes + '/' + this.maxStrokes + ' 杆', powerPct: 0 });
+      this.showBanner('💦 下水了！', '罚一杆 · 从岸边继续', 1400);
+    }, 800);
+  },
+
   holeIn() {
     this.ball.x = this.holeX;
     this.ball.y = this.groundY;
@@ -530,7 +632,7 @@ Page({
     }
     setTimeout(() => {
       if (tk !== this.playToken) return;
-      this.settle(this.strokes === 1 ? 'ace' : 'holed2');
+      this.settle(this.strokes === 1 ? 'ace' : this.strokes === 2 ? 'birdie' : 'par');
     }, this.forceHole ? 900 : 420);
   },
 
@@ -541,19 +643,25 @@ Page({
       this.lastGap = gap;
       return this.startReplay();
     }
-    if (this.strokes === 1) {
-      // 第 2 杆机会：从停球点再打
-      this.strokes = 2;
+    if (this.strokes < this.maxStrokes) {
+      // 还有杆数：从停球点继续；停在沙坑里则下一杆力量打折
+      this.strokes++;
+      const inSand = this.inZone(this.bunker, this.ball.x);
+      this.sandLie = inSand;
       this.state = 'aim';
-      this.setData({ strokeTip: '第 2 杆', powerPct: 0 });
-      this.showBanner('还有救！', '第 2 杆 · 从停球点继续', 1300);
+      this.setData({ strokeTip: '第 ' + this.strokes + '/' + this.maxStrokes + ' 杆' + (inSand ? ' · 沙坑' : ''), powerPct: 0 });
+      this.showBanner(
+        inSand ? '🏖️ 陷进沙坑了！' : '还有救！',
+        inSand ? '沙坑救球 · 这杆力量打七五折' : '第 ' + this.strokes + ' 杆 · 从停球点继续',
+        1300
+      );
       return;
     }
     this.settle('stop');
   },
 
-  // 计分并进入下一洞
-  // outcome: ace(一杆进洞) | holed2(两杆进洞) | rim(洞边1cm) | stop(中途停下) | out(飞出屏幕)
+  // 计分并进入下一洞（高尔夫术语计分）
+  // outcome: ace(一杆进洞) | birdie(两杆) | par(三杆) | rim(洞边1cm) | stop(未进=Bogey) | out(飞出屏幕)
   settle(outcome) {
     if (this.destroyed || this.state === 'idle') return;
     this.state = 'wait';
@@ -568,12 +676,16 @@ Page({
       if (this.combo > this.stats.bestCombo) this.stats.bestCombo = this.combo;
       this.sfxAce();
       this.spawnParticles(this.holeX, this.groundY - 30, '#fbbf24', 30);
-      this.popups.push({ x: bx, y: this.groundY - 90, text: '⛳ 一杆进洞 +' + gain, color: '#fbbf24', life: 1.2 });
+      this.popups.push({ x: bx, y: this.groundY - 90, text: '⛳ Ace 一杆进洞 +' + gain, color: '#fbbf24', life: 1.2 });
       if (this.combo >= 2 && !this.forceHole) this.showBanner('🔥 连击 x' + this.combo, '下一杆 +' + (120 + 30 * (this.combo - 1)) + ' 分', 1500);
-    } else if (outcome === 'holed2') {
+    } else if (outcome === 'birdie') {
       this.combo = 0;
-      gain = 30;
-      this.popups.push({ x: bx, y: this.groundY - 90, text: '两杆进洞 +30', color: '#4ade80', life: 1.1 });
+      gain = 40;
+      this.popups.push({ x: bx, y: this.groundY - 90, text: '🐦 Birdie 两杆进洞 +40', color: '#4ade80', life: 1.1 });
+    } else if (outcome === 'par') {
+      this.combo = 0;
+      gain = 15;
+      this.popups.push({ x: bx, y: this.groundY - 90, text: 'Par 三杆进洞 +15', color: '#a3e635', life: 1.1 });
     } else if (outcome === 'rim') {
       this.combo = 0;
       gain = 50;
@@ -581,11 +693,11 @@ Page({
       this.popups.push({ x: bx, y: this.groundY - 90, text: '差一丢丢 +50', color: '#f472b6', life: 1.2 });
     } else if (outcome === 'stop') {
       this.combo = 0;
-      this.popups.push({ x: bx, y: this.groundY - 90, text: '下次加油 +0', color: '#94a3b8', life: 1 });
+      this.popups.push({ x: bx, y: this.groundY - 90, text: 'Bogey 下次加油 +0', color: '#94a3b8', life: 1 });
     } else if (outcome === 'out') {
       this.combo = 0;
       gain = -20;
-      this.popups.push({ x: bx, y: this.groundY - 90, text: '你在干嘛？ -20', color: '#f87171', life: 1.2 });
+      this.popups.push({ x: bx, y: this.groundY - 90, text: '你在干嘛？OB -20', color: '#f87171', life: 1.2 });
     }
 
     this.sessionScore += gain;
@@ -744,51 +856,278 @@ Page({
   },
 
   // ==================== 渲染 ====================
+  // 按皮肤生成专属装饰物集合（initCanvas / 切皮肤时重建）
+  buildDecos() {
+    if (!this.vw) return;
+    const vw = this.vw, vh = this.vh, gy = this.groundY;
+    const key = this.data.skin;
+    const d = { clouds: [], stars: [], buildings: [], trees: [], flowers: [], cacti: [], pebbles: [], craters: [], earth: null };
+
+    if (key === 'park') {
+      // 两层视差积云：近层大而快，远层小而慢
+      for (let i = 0; i < 3; i++) d.clouds.push({ x: rand(0, vw), y: rand(24, vh * 0.2), s: rand(0.85, 1.2), spd: rand(8, 14), a: 0.92 });
+      for (let i = 0; i < 3; i++) d.clouds.push({ x: rand(0, vw), y: rand(vh * 0.08, vh * 0.28), s: rand(0.45, 0.7), spd: rand(3, 6), a: 0.55 });
+      // 地平线一排圆冠树影
+      let tx = rand(10, 60);
+      while (tx < vw) { d.trees.push({ x: tx, r: rand(13, 24) }); tx += rand(55, 120); }
+      // 草地小花
+      for (let i = 0; i < 14; i++) d.flowers.push({ x: rand(0, vw), y: rand(gy + 18, vh - 10), c: pick(['#f472b6', '#fbbf24', '#ffffff']) });
+    } else if (key === 'neon') {
+      for (let i = 0; i < 42; i++) d.stars.push({ x: rand(0, vw), y: rand(0, gy - 130), tw: rand(0, Math.PI * 2) });
+      // 城市楼群剪影 + 点亮的窗
+      let bx = -rand(0, 20);
+      while (bx < vw) {
+        const w = rand(28, 62), h = rand(46, 150), wins = [];
+        for (let wy = 10; wy < h - 10; wy += 15) {
+          for (let wx = 6; wx < w - 8; wx += 12) if (Math.random() < 0.38) wins.push({ x: wx, y: wy });
+        }
+        d.buildings.push({ x: bx, w, h, wins });
+        bx += w + rand(4, 16);
+      }
+    } else if (key === 'desert') {
+      // 扁长薄云 1~2 朵
+      d.clouds.push({ x: rand(0, vw), y: rand(30, vh * 0.16), s: rand(0.9, 1.2), spd: rand(4, 7), a: 0.4, flat: true });
+      if (Math.random() < 0.7) d.clouds.push({ x: rand(0, vw), y: rand(vh * 0.14, vh * 0.26), s: rand(0.55, 0.8), spd: rand(2, 4), a: 0.28, flat: true });
+      // 仙人掌剪影 + 地面石子
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < n; i++) d.cacti.push({ x: rand(vw * 0.08, vw * 0.92), h: rand(26, 46) * this.S });
+      for (let i = 0; i < 12; i++) d.pebbles.push({ x: rand(0, vw), y: rand(gy + 16, vh - 8), r: rand(1.5, 3.5) });
+    } else {
+      // 月球：满天星 + 悬空地球 + 月面环形山
+      for (let i = 0; i < 54; i++) d.stars.push({ x: rand(0, vw), y: rand(0, gy - 30), tw: rand(0, Math.PI * 2) });
+      d.earth = { x: vw * rand(0.66, 0.82), y: vh * rand(0.1, 0.18), r: 15 * this.S };
+      for (let i = 0; i < 4; i++) d.craters.push({ x: rand(24, vw - 24), y: rand(gy + 18, vh - 14), r: rand(9, 22) });
+    }
+    this.deco = d;
+  },
+
+  // 蓬松积云：多段圆弧拼出"上蓬下平"轮廓后一次填充（无内部接缝）；flat=扁长薄云
+  drawCloud(x, y, s, alpha, flat) {
+    const ctx = this.ctx;
+    const k = this.S * s;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const g = ctx.createLinearGradient(0, y - 30 * k, 0, y + 12 * k);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(1, flat ? 'rgba(255,255,255,.7)' : '#d7e3ee');   // 底部微灰营造体积感
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    if (flat) {
+      ctx.ellipse(x, y, 52 * k, 8 * k, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + 34 * k, y + 5 * k, 32 * k, 6 * k, 0, 0, Math.PI * 2);
+    } else {
+      ctx.arc(x - 30 * k, y + 3 * k, 13 * k, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.arc(x - 15 * k, y - 9 * k, 14 * k, Math.PI * 0.95, Math.PI * 1.75);
+      ctx.arc(x + 3 * k, y - 14 * k, 16 * k, Math.PI * 1.05, Math.PI * 1.9);
+      ctx.arc(x + 21 * k, y - 7 * k, 13 * k, Math.PI * 1.25, Math.PI * 1.98);
+      ctx.arc(x + 33 * k, y + 3 * k, 11 * k, Math.PI * 1.5, Math.PI * 0.5);
+      ctx.closePath();                                              // 平底封口
+    }
+    ctx.fill();
+    ctx.restore();
+  },
+
+  // 仙人掌剪影：主干 + 左右两条弯臂
+  drawCactus(x, gy, h) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(22,78,52,.75)';
+    ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x, gy - h); ctx.stroke();
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x, gy - h * 0.55); ctx.lineTo(x - 9, gy - h * 0.58); ctx.lineTo(x - 9, gy - h * 0.85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, gy - h * 0.38); ctx.lineTo(x + 9, gy - h * 0.42); ctx.lineTo(x + 9, gy - h * 0.68);
+    ctx.stroke();
+    ctx.restore();
+  },
+
   drawBackground(dt, skin) {
     const { ctx, vw, vh } = this;
+    const key = this.data.skin;
+    const d = this.deco || { clouds: [], stars: [], buildings: [], trees: [], flowers: [], cacti: [], pebbles: [], craters: [] };
     const g = ctx.createLinearGradient(0, 0, 0, vh);
     g.addColorStop(0, skin.sky[0]); g.addColorStop(0.55, skin.sky[1]); g.addColorStop(1, skin.sky[2]);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, vw, vh);
 
-    // 装饰：夜景画星星，白天画云
-    const night = this.data.skin === 'neon' || this.data.skin === 'moon';
-    for (const c of this.decos) {
-      if (night) {
-        ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + 0.5 * Math.abs(Math.sin(now() / 900 + c.x))) + ')';
-        ctx.beginPath(); ctx.arc(c.x, c.y, 1.6, 0, Math.PI * 2); ctx.fill();
-      } else {
-        c.x -= c.spd * dt;
-        if (c.x < -60) c.x = vw + 60;
-        ctx.fillStyle = 'rgba(255,255,255,.5)';
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-        ctx.arc(c.x + c.r * 0.8, c.y + 4, c.r * 0.65, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    // ---- 天空主角（各皮肤专属） ----
+    if (key === 'park') {
+      // 晨光太阳 + 光晕
+      const sx = vw * 0.84, sy = vh * 0.13;
+      const halo = ctx.createRadialGradient(sx, sy, 4, sx, sy, 58);
+      halo.addColorStop(0, 'rgba(253,224,71,.85)'); halo.addColorStop(1, 'rgba(253,224,71,0)');
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(sx, sy, 58, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI * 2); ctx.fill();
+    } else if (key === 'desert') {
+      // 灼热大橙日
+      const sx = vw * 0.76, sy = vh * 0.15;
+      const halo = ctx.createRadialGradient(sx, sy, 6, sx, sy, 76);
+      halo.addColorStop(0, 'rgba(251,146,60,.8)'); halo.addColorStop(1, 'rgba(251,146,60,0)');
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(sx, sy, 76, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fb923c'; ctx.beginPath(); ctx.arc(sx, sy, 27, 0, Math.PI * 2); ctx.fill();
+    } else if (key === 'neon') {
+      // 月牙：大圆减去偏移的天空色圆
+      const mx = vw * 0.82, my = vh * 0.12;
+      ctx.fillStyle = '#fef9c3'; ctx.beginPath(); ctx.arc(mx, my, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = skin.sky[0]; ctx.beginPath(); ctx.arc(mx - 7, my - 4, 13, 0, Math.PI * 2); ctx.fill();
+    } else if (d.earth) {
+      // 月球视角的地球：蓝底 + 绿斑 + 大气光晕
+      const e = d.earth;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(147,197,253,.5)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 2, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.clip();
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath(); ctx.ellipse(e.x - e.r * 0.35, e.y - e.r * 0.25, e.r * 0.45, e.r * 0.3, -0.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(e.x + e.r * 0.4, e.y + e.r * 0.35, e.r * 0.35, e.r * 0.22, 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     }
 
-    // 远山/远景
-    ctx.fillStyle = skin.far;
-    ctx.globalAlpha = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, this.groundY);
-    ctx.quadraticCurveTo(vw * 0.25, this.groundY - 70, vw * 0.5, this.groundY);
-    ctx.quadraticCurveTo(vw * 0.78, this.groundY - 100, vw, this.groundY);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    // 星星（霓虹 / 月球）
+    for (const s of d.stars) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.35 + 0.55 * Math.abs(Math.sin(now() / 900 + s.tw + s.x))) + ')';
+      ctx.beginPath(); ctx.arc(s.x, s.y, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // 云（公园积云 / 沙漠薄云），持续向左漂
+    for (const c of d.clouds) {
+      c.x -= c.spd * dt;
+      if (c.x < -90 * c.s * this.S) c.x = vw + 90 * c.s * this.S;
+      this.drawCloud(c.x, c.y, c.s, c.a, c.flat);
+    }
 
-    // 草地
+    // ---- 地平线远景 ----
+    if (key === 'neon') {
+      for (const b of d.buildings) {
+        ctx.fillStyle = 'rgba(10,14,28,.88)';
+        ctx.fillRect(b.x, this.groundY - b.h, b.w, b.h);
+        ctx.fillStyle = 'rgba(250,204,21,.7)';
+        for (const w of b.wins) ctx.fillRect(b.x + w.x, this.groundY - b.h + w.y, 4, 6);
+      }
+    } else if (key === 'desert') {
+      // 层叠沙丘
+      ctx.fillStyle = skin.far;
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.moveTo(0, this.groundY);
+      ctx.quadraticCurveTo(vw * 0.5, this.groundY - 120, vw, this.groundY);
+      ctx.fill();
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, this.groundY);
+      ctx.quadraticCurveTo(vw * 0.22, this.groundY - 80, vw * 0.48, this.groundY);
+      ctx.quadraticCurveTo(vw * 0.72, this.groundY - 55, vw, this.groundY);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      for (const c of d.cacti) this.drawCactus(c.x, this.groundY, c.h);
+    } else if (key === 'park') {
+      // 远山 + 一排树影
+      ctx.fillStyle = skin.far;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, this.groundY);
+      ctx.quadraticCurveTo(vw * 0.25, this.groundY - 70, vw * 0.5, this.groundY);
+      ctx.quadraticCurveTo(vw * 0.78, this.groundY - 100, vw, this.groundY);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(22,101,52,.5)';
+      for (const t of d.trees) {
+        ctx.fillRect(t.x - 2, this.groundY - t.r - 9, 4, t.r + 9);
+        ctx.beginPath(); ctx.arc(t.x, this.groundY - t.r - 10, t.r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // 月球：无远山无云，保留纯净地平线
+
+    // ---- 地面 ----
     const gg = ctx.createLinearGradient(0, this.groundY, 0, vh);
     gg.addColorStop(0, skin.ground); gg.addColorStop(1, skin.groundDeep);
     ctx.fillStyle = gg;
     ctx.fillRect(0, this.groundY, vw, vh - this.groundY);
-    // 草纹
-    ctx.strokeStyle = 'rgba(0,0,0,.08)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 5; i++) {
-      const y = this.groundY + 14 + i * 16;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(vw, y); ctx.stroke();
+
+    // ---- 地面细节（各皮肤专属） ----
+    if (key === 'park') {
+      ctx.strokeStyle = 'rgba(0,0,0,.08)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = this.groundY + 14 + i * 16;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(vw, y); ctx.stroke();
+      }
+      for (const f of d.flowers) {
+        ctx.fillStyle = f.c;
+        ctx.beginPath(); ctx.arc(f.x, f.y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (key === 'neon') {
+      // 暗色路面 + 霓虹边缘灯带
+      ctx.strokeStyle = 'rgba(255,255,255,.05)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = this.groundY + 20 + i * 18;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(vw, y); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(232,121,249,.55)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([16, 20]);
+      ctx.beginPath(); ctx.moveTo(0, this.groundY + 2); ctx.lineTo(vw, this.groundY + 2); ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (key === 'desert') {
+      // 沙纹波浪 + 石子
+      ctx.strokeStyle = 'rgba(120,53,15,.16)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = this.groundY + 18 + i * 18;
+        ctx.beginPath();
+        for (let x = 0; x <= vw; x += 24) {
+          const yy = y + Math.sin(x / 24 + i * 2) * 3;
+          if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(120,53,15,.35)';
+      for (const p of d.pebbles) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      // 月面环形山：椭圆坑 + 受光的上缘
+      for (const c of d.craters) {
+        ctx.fillStyle = 'rgba(30,41,59,.5)';
+        ctx.beginPath(); ctx.ellipse(c.x, c.y, c.r, c.r * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(241,245,249,.3)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(c.x, c.y - 1.5, c.r, c.r * 0.38, 0, Math.PI, Math.PI * 2); ctx.stroke();
+      }
+    }
+  },
+
+  // 沙坑 / 水塘（世界坐标，随相机平移）
+  drawHazards() {
+    const { ctx } = this;
+    const gy = this.groundY;
+    if (this.bunker) {
+      const z = this.bunker, cx = (z.x0 + z.x1) / 2, rw = (z.x1 - z.x0) / 2;
+      ctx.fillStyle = '#e7cf9b';
+      ctx.beginPath(); ctx.ellipse(cx, gy + 3, rw, 9, 0, 0, Math.PI * 2); ctx.fill();
+      // 坑内阴影营造凹陷感
+      ctx.fillStyle = 'rgba(146,110,55,.3)';
+      ctx.beginPath(); ctx.ellipse(cx, gy + 5, rw * 0.82, 5.5, 0, 0, Math.PI); ctx.fill();
+    }
+    if (this.water) {
+      const z = this.water, cx = (z.x0 + z.x1) / 2, rw = (z.x1 - z.x0) / 2;
+      ctx.fillStyle = '#3b82f6';
+      ctx.beginPath(); ctx.ellipse(cx, gy + 3, rw, 8, 0, 0, Math.PI * 2); ctx.fill();
+      // 游动的波光短线
+      ctx.strokeStyle = 'rgba(255,255,255,.55)';
+      ctx.lineWidth = 1.4;
+      const ph = now() / 500;
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const wx = z.x0 + ((ph * 16 + i * rw * 0.6) % (rw * 1.7)) + rw * 0.15;
+        ctx.moveTo(wx - 5, gy + 1.5 + i * 2); ctx.lineTo(wx + 5, gy + 1.5 + i * 2);
+      }
+      ctx.stroke();
     }
   },
 
@@ -950,6 +1289,7 @@ Page({
         ctx.scale(1.5, 1.5);
         ctx.translate(-this.holeX, -this.groundY + 20);
         this.drawBackground(dt, skin);
+        this.drawHazards();
         this.drawHole();
         // 轨迹虚线
         ctx.strokeStyle = 'rgba(255,255,255,.4)';
@@ -977,6 +1317,7 @@ Page({
         if (camTarget === 0 && this.camX < 0.5) this.camX = 0;
         ctx.save();
         ctx.translate(-this.camX, 0);
+        this.drawHazards();
         this.drawHole();
         this.drawAim();
         this.drawBall(this.ball.x, this.ball.y, this.sinking);
@@ -997,6 +1338,7 @@ Page({
     if (!SKINS[skin]) return;
     wx.setStorageSync(SKIN_KEY, skin);
     this.setData({ skin });
+    this.buildDecos();         // 切皮肤重建专属装饰物
   },
   onBackMenu() {
     this.sfxClick();

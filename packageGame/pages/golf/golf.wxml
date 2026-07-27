@@ -14,6 +14,7 @@
   <view class="hud hole-tag" style="top: {{hudTop}}px;" wx:if="{{phase === 'playing'}}">
     <text>{{mode === 'daily' ? '每日一洞 ' + holeNo + '/5' : '第 ' + holeNo + ' 洞'}}</text>
     <text class="hole-dist">{{distLabel}} · {{strokeTip}}</text>
+    <text class="hole-wind {{windCls}}">{{windLabel}}</text>
   </view>
 
   <!-- 提示横幅（连击 / 运气球 / 差一丢丢） -->

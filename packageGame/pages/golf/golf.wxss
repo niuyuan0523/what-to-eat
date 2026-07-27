@@ -66,6 +66,18 @@ page {
   margin-top: 4rpx;
 }
 
+/* 风力：顺风绿 / 逆风红 / 无风灰 */
+.hole-wind {
+  font-size: 20rpx;
+  font-weight: 400;
+  color: #cbd5e1;
+  margin-top: 2rpx;
+}
+
+.hole-wind.tail { color: #4ade80; }
+
+.hole-wind.head { color: #f87171; }
+
 /* 提示横幅 */
 .banner {
   left: 50%;
