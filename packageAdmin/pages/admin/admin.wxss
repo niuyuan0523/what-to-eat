@@ -288,3 +288,73 @@
 .modal-footer .btn {
   flex: 1;
 }
+
+/* 菜品图片上传区 */
+.image-upload-section {
+  padding: 20rpx 32rpx;
+  background-color: #fff;
+}
+
+.image-upload-label {
+  font-size: 28rpx;
+  color: #646566;
+  margin-bottom: 16rpx;
+}
+
+.image-upload-body {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.image-preview-wrapper {
+  position: relative;
+  width: 160rpx;
+  height: 160rpx;
+  flex-shrink: 0;
+}
+
+.image-preview {
+  width: 100%;
+  height: 100%;
+  border-radius: 12rpx;
+  background-color: #f5f5f5;
+}
+
+.image-remove {
+  position: absolute;
+  top: -12rpx;
+  right: -12rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-upload-btn {
+  width: 160rpx;
+  height: 160rpx;
+  border: 2rpx dashed #dcdee0;
+  border-radius: 12rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  font-size: 22rpx;
+  color: #999;
+  background-color: #fafafa;
+}
+
+.image-upload-btn:active {
+  background-color: #f2f3f5;
+}
+
+.image-upload-tip {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #bbb;
+}

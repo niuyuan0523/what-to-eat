@@ -4,7 +4,7 @@
   <view class="intro">
     <view class="intro-title">吃什么 🍜</view>
     <view class="intro-desc">
-      好好吃饭，认真运动，把平凡日子过成闪闪发光的小日常 ✨ 随心点一份心仪餐食，打卡记录每一次挥汗成长，闲暇时来局小游戏放松解压。各模块独立运行，启动轻快，随开随用。
+      今天吃什么？不用再纠结 ✨ 把家里的拿手菜记成专属菜单，分享给家人点菜，吃完还能点评送爱心；饭后打卡运动、闲时来局小游戏，把平凡日子过成闪闪发光的小日常。
     </view>
   </view>
 
@@ -37,11 +37,11 @@
       <view class="module-arrow">›</view>
     </view>
 
-    <view class="module-card admin" bindtap="goAdmin" wx:if="{{isAdmin}}">
-      <view class="module-icon">⚙️</view>
+    <view class="module-card admin" bindtap="goAdmin">
+      <view class="module-icon">📖</view>
       <view class="module-info">
-        <view class="module-name">后台管理</view>
-        <view class="module-sub">菜单维护 · 数据管理</view>
+        <view class="module-name">我的菜单</view>
+        <view class="module-sub">记录拿手菜 · 自拍菜品图 · 专属家庭菜单</view>
       </view>
       <view class="module-arrow">›</view>
     </view>

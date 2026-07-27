@@ -6,18 +6,17 @@ if (wx.cloud) {
   });
 }
 
-const db = wx.cloud.database()
-const _ = db.command
-
 Page({
   data: {
     docId: '',           // 数据库文档 ID
+    openid: '',          // 当前用户 openid（用于图片上传路径）
     categories: [],      // 所有分类数据
     currentTab: 0,       // 当前选中的分类索引
     showEditModal: false, // 是否显示编辑弹窗
     editMode: 'add',     // 编辑模式：add 或 edit
     editType: 'goods',   // 编辑类型：goods 或 category
     formData: {},        // 表单数据
+    uploading: false,    // 图片上传中
     loading: false
   },
 
@@ -25,58 +24,41 @@ Page({
     this.loadData()
   },
 
-  // 加载数据（使用云函数获取，确保权限正确）
+  // 加载自己的菜单（云函数按 openid 归属查询，不存在时自动创建默认菜单）
   loadData() {
     wx.showLoading({ title: '加载中...' })
-    
-    // 优先使用云函数获取数据
+
     wx.cloud.callFunction({
       name: 'updateMenuData',
       data: {
         action: 'get'
       },
       success: res => {
-        console.log('云函数加载成功', res)
-        if (res.result && res.result.success && res.result.data && res.result.data.length > 0) {
-          const doc = res.result.data[0]
-          this.setData({
-            docId: doc._id,
-            categories: doc.categories || []
-          })
-          wx.hideLoading()
-        } else {
-          // 云函数无数据，尝试直接查询
-          this.loadDataDirect()
-        }
-      },
-      fail: err => {
-        console.log('云函数调用失败，使用直接查询', err)
-        // 云函数调用失败，回退到直接查询
-        this.loadDataDirect()
-      }
-    })
-  },
+        console.log('菜单加载成功', res)
+        wx.hideLoading()
+        const result = res.result || {}
 
-  // 直接查询数据库（备用方案）
-  loadDataDirect() {
-    db.collection('menu_config').get({
-      success: res => {
-        console.log('直接查询成功', res)
-        if (res.data && res.data.length > 0) {
-          const doc = res.data[0]
+        if (result.success && result.data && result.data.length > 0) {
+          const doc = result.data[0]
           this.setData({
             docId: doc._id,
+            openid: result.openid || '',
             categories: doc.categories || []
           })
+        } else {
+          wx.showToast({
+            title: result.message || '加载失败',
+            icon: 'error'
+          })
         }
-        wx.hideLoading()
       },
       fail: err => {
-        console.error('加载失败', err)
+        console.error('菜单加载失败', err)
         wx.hideLoading()
-        wx.showToast({
+        wx.showModal({
           title: '加载失败',
-          icon: 'error'
+          content: `请确认云函数 updateMenuData 已部署\n\n错误信息: ${err.errMsg}`,
+          showCancel: false
         })
       }
     })
@@ -119,7 +101,7 @@ Page({
   deleteCategory() {
     wx.showModal({
       title: '确认删除',
-      content: '确定要删除该分类及其所有商品吗？',
+      content: '确定要删除该分类及其所有菜品吗？',
       success: (res) => {
         if (res.confirm) {
           const categories = this.data.categories
@@ -130,7 +112,7 @@ Page({
     })
   },
 
-  // 添加商品
+  // 添加菜品
   addGoods() {
     const categoryId = this.data.categories[this.data.currentTab].id
     this.setData({
@@ -140,9 +122,6 @@ Page({
       formData: {
         id: 'g_' + Date.now(),
         name: '',
-        price: 0,
-        originalPrice: 0,
-        sales: 0,
         image: '',
         desc: '',
         categoryId: categoryId
@@ -150,7 +129,7 @@ Page({
     })
   },
 
-  // 编辑商品
+  // 编辑菜品
   editGoods(e) {
     const goodsIndex = e.currentTarget.dataset.index
     const category = this.data.categories[this.data.currentTab]
@@ -165,13 +144,13 @@ Page({
     })
   },
 
-  // 删除商品
+  // 删除菜品
   deleteGoods(e) {
     const goodsIndex = e.currentTarget.dataset.index
     
     wx.showModal({
       title: '确认删除',
-      content: '确定要删除该商品吗？',
+      content: '确定要删除该菜品吗？',
       success: (res) => {
         if (res.confirm) {
           const categories = this.data.categories
@@ -181,6 +160,63 @@ Page({
         }
       }
     })
+  },
+
+  // 拍照/相册选择菜品图片并上传到云存储
+  chooseImage() {
+    if (this.data.uploading) return
+
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      sizeType: ['compressed'],
+      success: (res) => {
+        const tempFilePath = res.tempFiles[0].tempFilePath
+        this.uploadImage(tempFilePath)
+      },
+      fail: (err) => {
+        // 用户取消不提示
+        if (err.errMsg && err.errMsg.includes('cancel')) return
+        console.error('选择图片失败', err)
+      }
+    })
+  },
+
+  // 上传图片到云存储，将 fileID 写入表单
+  uploadImage(tempFilePath) {
+    this.setData({ uploading: true })
+    wx.showLoading({ title: '上传中...' })
+
+    const ext = tempFilePath.split('.').pop() || 'jpg'
+    const cloudPath = `dish-images/${this.data.openid || 'anonymous'}/${Date.now()}.${ext}`
+
+    wx.cloud.uploadFile({
+      cloudPath: cloudPath,
+      filePath: tempFilePath,
+      success: (res) => {
+        console.log('图片上传成功', res.fileID)
+        const formData = this.data.formData
+        formData.image = res.fileID
+        this.setData({ formData })
+        wx.showToast({ title: '上传成功', icon: 'success' })
+      },
+      fail: (err) => {
+        console.error('图片上传失败', err)
+        wx.showToast({ title: '上传失败，请重试', icon: 'none' })
+      },
+      complete: () => {
+        this.setData({ uploading: false })
+        wx.hideLoading()
+      }
+    })
+  },
+
+  // 移除已选图片
+  removeImage() {
+    const formData = this.data.formData
+    formData.image = ''
+    this.setData({ formData })
   },
 
   // Vant Field 输入变化事件
@@ -212,8 +248,8 @@ Page({
         return
       }
     } else {
-      if (!formData.name || !formData.price) {
-        wx.showToast({ title: '请填写完整信息', icon: 'error' })
+      if (!formData.name) {
+        wx.showToast({ title: '请输入菜品名称', icon: 'error' })
         return
       }
     }
@@ -228,7 +264,7 @@ Page({
         categories[currentTab] = formData
       }
     } else {
-      // 处理商品
+      // 处理菜品
       const categoryIndex = categories.findIndex(c => c.id === formData.categoryId)
       if (categoryIndex !== -1) {
         if (editMode === 'add') {
@@ -242,14 +278,13 @@ Page({
     this.saveData(categories)
   },
 
-  // 保存数据到数据库（使用云函数，绕过权限限制）
+  // 保存数据到数据库（云函数会校验只能修改自己的菜单）
   saveData(categories) {
     wx.showLoading({ title: '保存中...' })
     
     console.log('开始保存数据，docId:', this.data.docId)
     console.log('保存的数据:', categories)
     
-    // 使用云函数保存数据
     wx.cloud.callFunction({
       name: 'updateMenuData',
       data: {
@@ -283,42 +318,9 @@ Page({
       fail: err => {
         console.error('云函数调用失败', err)
         wx.hideLoading()
-        
-        // 云函数失败，尝试直接更新
-        this.saveDataDirect(categories)
-      }
-    })
-  },
-
-  // 直接更新数据库（备用方案）
-  saveDataDirect(categories) {
-    wx.showLoading({ title: '保存中...' })
-    
-    db.collection('menu_config').doc(this.data.docId).update({
-      data: {
-        categories: categories
-      },
-      success: res => {
-        console.log('直接保存成功', res)
-        wx.hideLoading()
-        this.closeModal()
-        this.setData({ categories })
-        wx.showToast({
-          title: '保存成功',
-          icon: 'success'
-        })
-        
-        // 重新加载数据
-        setTimeout(() => {
-          this.loadData()
-        }, 1000)
-      },
-      fail: err => {
-        console.error('保存失败', err)
-        wx.hideLoading()
         wx.showModal({
           title: '保存失败',
-          content: `错误信息: ${err.errMsg}\n\n请检查:\n1. 数据库权限设置\n2. 云函数是否已部署\n3. 是否为数据创建者`,
+          content: `请确认云函数 updateMenuData 已部署\n\n错误信息: ${err.errMsg}`,
           showCancel: false
         })
       }
@@ -373,55 +375,10 @@ Page({
     })
   },
 
-  // 获取管理员 OpenID
-  getAdminOpenId() {
-    wx.showLoading({ title: '获取中...' })
-    
-    wx.cloud.callFunction({
-      name: 'getOpenId',
-      success: res => {
-        console.log('获取 OpenID 成功', res)
-        wx.hideLoading()
-        
-        if (res.result && res.result.success) {
-          const openid = res.result.openid
-          
-          wx.showModal({
-            title: '管理员 OpenID',
-            content: openid,
-            confirmText: '复制',
-            showCancel: true,
-            cancelText: '关闭',
-            success: (modalRes) => {
-              if (modalRes.confirm) {
-                wx.setClipboardData({
-                  data: openid,
-                  success: () => {
-                    wx.showToast({
-                      title: '已复制到剪贴板',
-                      icon: 'success'
-                    })
-                  }
-                })
-              }
-            }
-          })
-        } else {
-          wx.showToast({
-            title: '获取失败',
-            icon: 'error'
-          })
-        }
-      },
-      fail: err => {
-        console.error('获取 OpenID 失败', err)
-        wx.hideLoading()
-        wx.showModal({
-          title: '获取失败',
-          content: `请确认云函数 getOpenId 已部署\n\n错误信息: ${err.errMsg}`,
-          showCancel: false
-        })
-      }
+  // 预览分享自己的菜单（进入点餐页）
+  previewMenu() {
+    wx.navigateTo({
+      url: '/packageOrder/pages/menu/menu'
     })
   },
 

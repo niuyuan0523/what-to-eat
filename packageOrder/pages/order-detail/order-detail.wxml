@@ -29,28 +29,22 @@
           value-class="value-text"
         />
         <van-cell 
-          title="商品数量" 
-          value="{{orderDetail.cartCount}}件"
+          title="菜品数量" 
+          value="{{orderDetail.cartCount}}道"
           value-class="value-text"
-        />
-        <van-cell 
-          title="订单总额" 
-          value="￥{{orderDetail.totalPrice}}"
-          value-class="price-text"
         />
       </van-cell-group>
     </view>
 
-    <!-- 商品列表 -->
+    <!-- 菜品列表 -->
     <view class="goods-section">
-      <view class="section-title">商品详情</view>
+      <view class="section-title">菜品详情</view>
       <view class="goods-list">
         <van-card
           wx:for="{{orderDetail.items}}"
           wx:key="id"
           title="{{item.name}}"
-          desc="{{item.spec || '常规规格'}}"
-          price="{{item.price}}"
+          desc="{{item.desc || ''}}"
           thumb="{{item.image}}"
           thumb-mode="aspectFill"
           num="{{item.cartCount}}"
@@ -61,7 +55,15 @@
     <!-- 温馨提示 -->
     <view class="tips-section">
       <van-icon name="info-o" color="#07c160" size="20px" />
-      <text class="tips-text">感谢您的购买，如有任何问题请联系客服</text>
+      <text class="tips-text">{{showShareTip ? '把订单分享给掌勺人，提醒TA开火吧~' : '订单已提交，坐等开饭吧~'}}</text>
+    </view>
+
+    <!-- 分享给掌勺人 -->
+    <view class="share-section">
+      <button class="share-owner-btn" open-type="share">
+        <van-icon name="share-o" size="18px" color="#fff" />
+        <text>把菜单发给掌勺人</text>
+      </button>
     </view>
 
     <!-- 底部按钮 -->

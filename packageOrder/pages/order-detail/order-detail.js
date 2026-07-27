@@ -13,14 +13,19 @@ Page({
     orderNo: '',
     orderDetail: null,
     loading: true,
-    orderStatus: ''
+    orderStatus: '',
+    showShareTip: false
   },
 
   onLoad(options) {
     console.log('订单详情页面加载，参数:', options)
     
     const orderNo = options.orderNo || ''
-    this.setData({ orderNo })
+    this.setData({ 
+      orderNo,
+      // 刚下完单跳转过来时，提示用户点右上角/分享按钮发给掌勺人
+      showShareTip: options.share === '1'
+    })
     
     if (orderNo) {
       this.loadOrderDetail(orderNo)
@@ -57,11 +62,8 @@ Page({
             orderStatus: this.getStatusText(order.status)
           })
         } else {
-          this.setData({ loading: false })
-          wx.showToast({
-            title: '订单不存在',
-            icon: 'error'
-          })
+          // 云端查不到（如刚下单尚未同步），回退到本地缓存
+          this.loadFromLocalCache(orderNo)
         }
       },
       fail: err => {
@@ -129,11 +131,12 @@ Page({
     });
   },
 
-  // 分享订单
+  // 分享订单给掌勺人
   onShareAppMessage() {
     const { orderNo, orderDetail } = this.data
+    const cartCount = orderDetail ? orderDetail.cartCount : ''
     return {
-      title: `我的订单 #${orderNo}`,
+      title: cartCount ? `点好啦！共${cartCount}道菜，请掌勺人开火 🍳` : `点好啦！请掌勺人开火 🍳`,
       path: `/packageOrder/pages/order-detail/order-detail?orderNo=${orderNo}`
     }
   }

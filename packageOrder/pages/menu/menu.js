@@ -14,22 +14,32 @@ Page({
     navBarHeight: 44,       // 导航栏内容高度
     navTotalHeight: 0,      // 导航栏总高度(px)
     bottomHeight: 50,       // 底部高度(安全区域 + 结算栏)
+    // 菜单归属
+    ownerId: '',            // 当前菜单主人的 openid
+    isOwner: true,          // 当前用户是否为菜单主人
     // 订单列表
     orderList: [],
     orderLoading: false,
-    // 1. 从云数据库获取数据（初始为空，在 onLoad 中加载）
+    // 从云数据库获取数据（初始为空，在 onLoad 中加载）
     categories: [],
     currentTab: 0,        // 当前选中的分类索引
-    toView: '',    // 右侧滚动到的锚点ID
+    toView: '',           // 右侧滚动到的锚点ID
     cartCount: 0,         // 购物车徽标数量
     showCart: false,      // 是否显示购物车弹窗
-    cartItems: [],        // 购物车商品列表
-    totalPrice: 0,        // 购物车总价
-    categoryTops: []       // 分类标题距离顶部的距离数组
+    cartItems: [],        // 购物车菜品列表
+    categoryTops: [],     // 分类标题距离顶部的距离数组
+    // 菜品评论/打赏弹窗
+    showDishModal: false,
+    currentDish: null,    // 当前查看的菜品
+    comments: [],         // 当前菜品的评论列表
+    commentLoading: false,
+    commentText: '',      // 评论输入内容
+    rewardCount: 0,       // 本次打赏的爱心数
+    authorName: ''        // 评论人称呼
   },
 
   // 页面加载时从云数据库获取数据
-  onLoad() {
+  onLoad(options) {
     // 获取状态栏高度，计算导航栏总高度
     const systemInfo = wx.getSystemInfoSync();
     const statusBarHeight = systemInfo.statusBarHeight;
@@ -39,13 +49,16 @@ Page({
     // 计算底部安全区域高度
     const screenHeight = systemInfo.screenHeight;
     const safeAreaBottom = systemInfo.safeArea ? (screenHeight - systemInfo.safeArea.bottom) : 0;
-    const bottomHeight = safeAreaBottom + 50; // 安全区域 + van-submit-bar(50px)
+    const bottomHeight = safeAreaBottom + 50; // 安全区域 + 底部结算栏(50px)
     
     this.setData({
       statusBarHeight: statusBarHeight,
       navBarHeight: navBarHeight,
       navTotalHeight: navTotalHeight,
-      bottomHeight: bottomHeight
+      bottomHeight: bottomHeight,
+      // 通过分享链接进入时携带菜单主人的 openid
+      ownerId: options.ownerId || '',
+      authorName: wx.getStorageSync('commentAuthorName') || ''
     });
     
     this.loadCategoriesFromCloud();
@@ -56,6 +69,14 @@ Page({
     if (this.data.activeNav === 1) {
       this.loadOrderList();
     }
+  },
+
+  // 分享菜单给家人：对方进入的是当前菜单主人的菜单
+  onShareAppMessage() {
+    return {
+      title: '来我家菜单点个菜吧 🍽️',
+      path: `/packageOrder/pages/menu/menu?ownerId=${this.data.ownerId}`
+    };
   },
 
   // 切换顶部导航栏
@@ -70,12 +91,13 @@ Page({
     }
   },
 
-  // 加载订单列表（从云数据库获取）
+  // 加载订单列表（仅当前菜单主人名下的订单）
   loadOrderList() {
     this.setData({ orderLoading: true });
     
     const db = wx.cloud.database();
     db.collection('orders')
+      .where({ ownerId: this.data.ownerId })
       .orderBy('createTime', 'desc')
       .limit(50)
       .get({
@@ -135,81 +157,81 @@ Page({
     });
   },
 
-  // 从云开发数据库加载分类数据
+  // 通过云函数加载菜单数据（自己的菜单不存在时会自动创建默认菜单）
   loadCategoriesFromCloud() {
     wx.showLoading({
       title: '加载中...'
     });
 
-    console.log('开始从云数据库加载数据...');
+    console.log('开始加载菜单数据，ownerId:', this.data.ownerId);
 
-    // 使用云数据库获取数据
-    const db = wx.cloud.database();
-    const _ = db.command;
-    const menuCollection = db.collection('menu_config');
-
-    menuCollection.get({
+    wx.cloud.callFunction({
+      name: 'updateMenuData',
+      data: {
+        action: 'get',
+        ownerId: this.data.ownerId || undefined
+      },
       success: res => {
-        console.log('数据库查询成功', res);
-        
-        if (res.data && res.data.length > 0) {
-          // 获取第一条文档的数据
-          const docData = res.data[0];
+        console.log('菜单查询成功', res);
+        const result = res.result || {};
+
+        if (result.success && result.data && result.data.length > 0) {
+          const docData = result.data[0];
           const categories = docData.categories || [];
-          
-          console.log('获取到分类数据', categories);
-          
+
           this.setData({
             categories: categories,
-            toView: categories.length > 0 ? categories[0].id : ''
+            toView: categories.length > 0 ? categories[0].id : '',
+            // 未携带 ownerId 时（打开自己的菜单），以文档归属为准
+            ownerId: docData.ownerId || this.data.ownerId,
+            isOwner: result.isOwner !== false
           });
 
           wx.hideLoading();
 
-          // 加载近一个月的销量数据
+          // 加载近一个月的点单数据与评论统计
           this.loadSalesData();
-          
+          this.loadCommentStats();
+
           // 延迟更新分类位置
           setTimeout(() => {
             this.updateCategoryTops();
           }, 500);
         } else {
-          console.warn('数据库中没有数据');
           wx.hideLoading();
-          this.showErrorAndOfferFallback('数据库中没有数据');
+          this.showLoadError(result.message || '菜单数据为空');
         }
       },
       fail: err => {
-        console.error('数据库查询失败', err);
-        console.error('错误码:', err.errCode);
-        console.error('错误信息:', err.errMsg);
-        
+        console.error('菜单查询失败', err);
         wx.hideLoading();
-        this.showErrorAndOfferFallback('数据库查询失败', err.errCode);
+        this.showLoadError('菜单加载失败', err.errCode);
       }
     });
   },
 
-  // 显示错误并提供备用方案
-  showErrorAndOfferFallback(errorMsg, errCode) {
+  // 加载失败提示（可重试）
+  showLoadError(errorMsg, errCode) {
     wx.showModal({
       title: '加载失败',
-      content: `${errorMsg}\n${errCode ? '错误码: ' + errCode : ''}\n\n请检查：\n1. 云环境 ID 是否正确\n2. 云开发是否已开通\n3. 数据库集合是否已创建`,
-      confirmText: '使用本地数据',
-      cancelText: '重试',
+      content: `${errorMsg}${errCode ? '\n错误码: ' + errCode : ''}`,
+      confirmText: '重试',
+      cancelText: '返回',
       success: (res) => {
         if (res.confirm) {
-          // 使用本地备用数据
-          this.loadLocalData();
-        } else if (res.cancel) {
-          // 重试
           this.loadCategoriesFromCloud();
+        } else {
+          wx.navigateBack({
+            fail: () => {
+              wx.reLaunch({ url: '/pages/index/index' });
+            }
+          });
         }
       }
     });
   },
 
-  // 加载近一个月的销量数据
+  // 加载近一个月的点单数据（仅统计当前菜单的订单）
   loadSalesData() {
     const db = wx.cloud.database();
     const _ = db.command;
@@ -223,15 +245,16 @@ Page({
     // 查询近一个月且未取消的订单
     db.collection('orders')
       .where({
+        ownerId: this.data.ownerId,
         createTime: _.gte(oneMonthAgo),
         status: _.neq('cancelled')
       })
       .limit(100)
       .get({
         success: res => {
-          console.log('销量查询成功，订单数:', res.data.length);
+          console.log('点单量查询成功，订单数:', res.data.length);
           
-          // 统计每个商品的销量
+          // 统计每个菜品被点次数
           const salesMap = {};
           res.data.forEach(order => {
             if (order.items && Array.isArray(order.items)) {
@@ -245,9 +268,9 @@ Page({
             }
           });
           
-          console.log('商品销量统计:', salesMap);
+          console.log('菜品点单统计:', salesMap);
           
-          // 更新 categories 中的销量数据
+          // 更新 categories 中的点单数据
           const categories = this.data.categories.map(cate => ({
             ...cate,
             goodsList: cate.goodsList.map(goods => ({
@@ -264,55 +287,193 @@ Page({
           }, 300);
         },
         fail: err => {
-          console.error('销量查询失败', err);
-          // 查询失败不影响正常使用，保持原有销量
+          console.error('点单量查询失败', err);
+          // 查询失败不影响正常使用
         }
       });
   },
 
-  // 加载本地备用数据
-  loadLocalData() {
-    console.log('使用本地备用数据');
-    
-    const localData = [
-      {
-        "id": "cate_01",
-        "name": "热销好物",
-        "goodsList": [
-          { "id": "g_01", "name": "招牌珍珠奶茶", "price": 16, "originalPrice": 18, "sales": 520, "image": "https://images.unsplash.com/photo-1541658016709-82535e94bc69?w=200", "desc": "经典红茶底配上Q弹现煮珍珠，醇香浓郁。" },
-          { "id": "g_02", "name": "多肉葡萄冰沙", "price": 22, "originalPrice": 22, "sales": 340, "image": "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=200", "desc": "满杯手剥新鲜葡萄果肉，搭配清爽绿茶冰沙。" },
-          { "id": "g_03", "name": "杨枝甘露", "price": 20, "originalPrice": 24, "sales": 610, "image": "https://images.unsplash.com/photo-1546173159-315724a31696?w=200", "desc": "浓郁芒果肉混合清爽西柚粒，椰奶香气十足。" }
-        ]
+  // 加载各菜品的累计爱心数与评论数
+  loadCommentStats() {
+    wx.cloud.callFunction({
+      name: 'dishComment',
+      data: {
+        action: 'stats',
+        ownerId: this.data.ownerId
       },
-      {
-        "id": "cate_02",
-        "name": "现磨咖啡",
-        "goodsList": [
-          { "id": "g_11", "name": "生椰拿铁", "price": 18, "originalPrice": 24, "sales": 888, "image": "https://images.unsplash.com/photo-1541167760496-1628856ab772?w=200", "desc": "冷榨生椰乳碰撞高品质浓缩咖啡，椰香四溢。" },
-          { "id": "g_12", "name": "美式咖啡", "price": 12, "originalPrice": 15, "sales": 150, "image": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=200", "desc": "经典意式浓缩加入纯净水，口感纯粹提神。" }
-        ]
+      success: res => {
+        const result = res.result || {};
+        if (!result.success || !Array.isArray(result.data)) return;
+
+        // _id 为 dishId
+        const statsMap = {};
+        result.data.forEach(item => {
+          statsMap[item._id] = {
+            totalReward: item.totalReward || 0,
+            commentCount: item.commentCount || 0
+          };
+        });
+
+        const categories = this.data.categories.map(cate => ({
+          ...cate,
+          goodsList: cate.goodsList.map(goods => ({
+            ...goods,
+            totalReward: (statsMap[goods.id] && statsMap[goods.id].totalReward) || 0,
+            commentCount: (statsMap[goods.id] && statsMap[goods.id].commentCount) || 0
+          }))
+        }));
+
+        this.setData({ categories });
+      },
+      fail: err => {
+        console.error('评论统计查询失败', err);
+        // 查询失败不影响正常使用
       }
-    ];
+    });
+  },
+
+  // ============ 菜品评论 / 打赏 ============
+
+  // 点击菜品卡片，打开评论弹窗
+  openDishModal(e) {
+    const goodsId = e.currentTarget.dataset.id;
+    let currentDish = null;
+
+    this.data.categories.forEach(cate => {
+      cate.goodsList.forEach(goods => {
+        if (goods.id === goodsId) {
+          currentDish = goods;
+        }
+      });
+    });
+
+    if (!currentDish) return;
 
     this.setData({
-      categories: localData,
-      toView: localData.length > 0 ? localData[0].id : ''
+      showDishModal: true,
+      currentDish: currentDish,
+      comments: [],
+      commentText: '',
+      rewardCount: 0
     });
 
-    wx.showToast({
-      title: '已使用本地数据',
-      icon: 'success',
-      duration: 2000
-    });
-
-    // 加载近一个月的销量数据
-    this.loadSalesData();
-
-    // 延迟更新分类位置
-    setTimeout(() => {
-      this.updateCategoryTops();
-    }, 500);
+    this.loadComments(goodsId);
   },
+
+  // 关闭评论弹窗
+  hideDishModal() {
+    this.setData({
+      showDishModal: false,
+      currentDish: null
+    });
+  },
+
+  // 加载当前菜品的评论列表
+  loadComments(dishId) {
+    this.setData({ commentLoading: true });
+
+    wx.cloud.callFunction({
+      name: 'dishComment',
+      data: {
+        action: 'list',
+        ownerId: this.data.ownerId,
+        dishId: dishId
+      },
+      success: res => {
+        const result = res.result || {};
+        const comments = (result.data || []).map(item => ({
+          ...item,
+          timeText: this.formatCommentTime(item.createTime)
+        }));
+        this.setData({
+          comments: comments,
+          commentLoading: false
+        });
+      },
+      fail: err => {
+        console.error('评论加载失败', err);
+        this.setData({ commentLoading: false });
+      }
+    });
+  },
+
+  // 格式化评论时间
+  formatCommentTime(createTime) {
+    if (!createTime) return '';
+    const date = new Date(createTime);
+    if (isNaN(date.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  },
+
+  // 评论输入
+  onCommentInput(e) {
+    this.setData({ commentText: e.detail });
+  },
+
+  // 称呼输入
+  onAuthorNameInput(e) {
+    this.setData({ authorName: e.detail });
+  },
+
+  // 爱心数量变化
+  onRewardChange(e) {
+    this.setData({ rewardCount: Number(e.detail) || 0 });
+  },
+
+  // 提交评论 + 打赏
+  submitComment() {
+    const { currentDish, commentText, rewardCount, authorName, ownerId } = this.data;
+    if (!currentDish) return;
+
+    if (!commentText.trim() && rewardCount === 0) {
+      wx.showToast({ title: '写点评价或送个爱心吧', icon: 'none' });
+      return;
+    }
+
+    // 记住称呼，下次自动带上
+    if (authorName.trim()) {
+      wx.setStorageSync('commentAuthorName', authorName.trim());
+    }
+
+    wx.showLoading({ title: '提交中...' });
+
+    wx.cloud.callFunction({
+      name: 'dishComment',
+      data: {
+        action: 'add',
+        ownerId: ownerId,
+        dishId: currentDish.id,
+        dishName: currentDish.name,
+        content: commentText.trim(),
+        reward: rewardCount,
+        authorName: authorName.trim() || '家人'
+      },
+      success: res => {
+        wx.hideLoading();
+        const result = res.result || {};
+        if (result.success) {
+          wx.showToast({
+            title: rewardCount > 0 ? `已送出 ${rewardCount} 颗爱心` : '点评成功',
+            icon: 'success'
+          });
+          this.setData({ commentText: '', rewardCount: 0 });
+          // 刷新评论列表与累计统计
+          this.loadComments(currentDish.id);
+          this.loadCommentStats();
+        } else {
+          wx.showToast({ title: result.message || '提交失败', icon: 'none' });
+        }
+      },
+      fail: err => {
+        console.error('评论提交失败', err);
+        wx.hideLoading();
+        wx.showToast({ title: '提交失败，请重试', icon: 'none' });
+      }
+    });
+  },
+
+  // ============ 分类 / 滚动 ============
 
   // 点击左侧分类，右侧联动跳转
   switchCategory(e) {
@@ -324,7 +485,7 @@ Page({
     });
   },
 
-  // 监听右侧商品列表滚动
+  // 监听右侧菜品列表滚动
   onGoodsScroll(e) {
     const scrollTop = e.detail.scrollTop;
     const categoryTops = this.data.categoryTops;
@@ -363,69 +524,16 @@ Page({
     });
     
     query.exec((res) => {
-      const tops = res.map(item => item.top);
+      const tops = res.map(item => item && item.top).filter(top => top !== undefined);
       this.setData({
         categoryTops: tops
       });
     });
   },
 
-  // 添加到购物车
-  addToCart(e) {
-    const goodsId = e.currentTarget.dataset.id;
-    const categories = this.data.categories;
-    let totalCartCount = 0;
-    
-    // 遍历所有分类和商品，找到对应商品并增加数量
-    for (let i = 0; i < categories.length; i++) {
-      for (let j = 0; j < categories[i].goodsList.length; j++) {
-        if (categories[i].goodsList[j].id === goodsId) {
-          if (!categories[i].goodsList[j].cartCount) {
-            categories[i].goodsList[j].cartCount = 0;
-          }
-          categories[i].goodsList[j].cartCount++;
-        }
-        // 计算总购物车数量
-        totalCartCount += categories[i].goodsList[j].cartCount || 0;
-      }
-    }
-    
-    this.setData({
-      categories: categories,
-      cartCount: totalCartCount
-    });
-    
-    this.updateCartItems();
-  },
+  // ============ 购物车 ============
 
-  // 从购物车减少
-  removeFromCart(e) {
-    const goodsId = e.currentTarget.dataset.id;
-    const categories = this.data.categories;
-    let totalCartCount = 0;
-    
-    // 遍历所有分类和商品，找到对应商品并减少数量
-    for (let i = 0; i < categories.length; i++) {
-      for (let j = 0; j < categories[i].goodsList.length; j++) {
-        if (categories[i].goodsList[j].id === goodsId) {
-          if (categories[i].goodsList[j].cartCount > 0) {
-            categories[i].goodsList[j].cartCount--;
-          }
-        }
-        // 计算总购物车数量
-        totalCartCount += categories[i].goodsList[j].cartCount || 0;
-      }
-    }
-    
-    this.setData({
-      categories: categories,
-      cartCount: totalCartCount
-    });
-    
-    this.updateCartItems();
-  },
-
-  // 商品 Stepper 数值变化事件（商品列表页）
+  // 菜品 Stepper 数值变化事件（菜品列表页）
   onGoodsStepperChange(e) {
     const goodsId = e.currentTarget.dataset.id;
     const newValue = e.detail;
@@ -471,13 +579,12 @@ Page({
     // 空函数，阻止点击事件冒泡到遮罩层
   },
 
-  // 更新购物车商品列表
+  // 更新购物车菜品列表
   updateCartItems() {
     const categories = this.data.categories;
     const cartItems = [];
-    let totalPrice = 0;
     
-    // 遍历所有分类，收集cartCount > 0的商品
+    // 遍历所有分类，收集cartCount > 0的菜品
     for (let i = 0; i < categories.length; i++) {
       for (let j = 0; j < categories[i].goodsList.length; j++) {
         const goods = categories[i].goodsList[j];
@@ -485,70 +592,19 @@ Page({
           cartItems.push({
             id: goods.id,
             name: goods.name,
-            price: goods.price,
             image: goods.image,
             cartCount: goods.cartCount
           });
-          totalPrice += goods.price * goods.cartCount;
         }
       }
     }
     
     this.setData({
-      cartItems: cartItems,
-      totalPrice: totalPrice
+      cartItems: cartItems
     });
   },
 
-  // 在弹窗中添加到购物车
-  addToCartInModal(e) {
-    const goodsId = e.currentTarget.dataset.id;
-    const categories = this.data.categories;
-    let totalCartCount = 0;
-    
-    for (let i = 0; i < categories.length; i++) {
-      for (let j = 0; j < categories[i].goodsList.length; j++) {
-        if (categories[i].goodsList[j].id === goodsId) {
-          categories[i].goodsList[j].cartCount++;
-        }
-        totalCartCount += categories[i].goodsList[j].cartCount || 0;
-      }
-    }
-    
-    this.setData({
-      categories: categories,
-      cartCount: totalCartCount
-    });
-    
-    this.updateCartItems();
-  },
-
-  // 在弹窗中从购物车减少
-  removeFromCartInModal(e) {
-    const goodsId = e.currentTarget.dataset.id;
-    const categories = this.data.categories;
-    let totalCartCount = 0;
-    
-    for (let i = 0; i < categories.length; i++) {
-      for (let j = 0; j < categories[i].goodsList.length; j++) {
-        if (categories[i].goodsList[j].id === goodsId) {
-          if (categories[i].goodsList[j].cartCount > 0) {
-            categories[i].goodsList[j].cartCount--;
-          }
-        }
-        totalCartCount += categories[i].goodsList[j].cartCount || 0;
-      }
-    }
-    
-    this.setData({
-      categories: categories,
-      cartCount: totalCartCount
-    });
-    
-    this.updateCartItems();
-  },
-
-  // Stepper 数值变化事件
+  // 购物车弹窗内 Stepper 数值变化事件
   onStepperChange(e) {
     const goodsId = e.currentTarget.dataset.id;
     const newValue = e.detail;
@@ -576,7 +632,7 @@ Page({
   clearCart() {
     const categories = this.data.categories;
     
-    // 将所有商品的cartCount重置为0
+    // 将所有菜品的cartCount重置为0
     for (let i = 0; i < categories.length; i++) {
       for (let j = 0; j < categories[i].goodsList.length; j++) {
         categories[i].goodsList[j].cartCount = 0;
@@ -587,16 +643,11 @@ Page({
       categories: categories,
       cartCount: 0,
       cartItems: [],
-      totalPrice: 0,
       showCart: false
     });
-    
-    wx.showToast({
-      title: '购物车已清空',
-      icon: 'success',
-      duration: 1500
-    });
   },
+
+  // ============ 下单 ============
 
   // 生成订单号
   generateOrderNo() {
@@ -611,18 +662,18 @@ Page({
     return `${year}${month}${day}${hours}${minutes}${seconds}${random}`;
   },
 
-  // 获取订单商品详情摘要（用于订阅消息，最多20个字符）
+  // 获取订单菜品摘要（用于订阅消息，最多20个字符）
   getOrderDetail() {
     const cartItems = this.data.cartItems;
     
     if (cartItems.length === 1) {
-      // 只有一个商品，显示商品名称和数量
+      // 只有一道菜，显示菜名和数量
       const item = cartItems[0];
       return `${item.name} x${item.cartCount}`.substring(0, 20);
     } else if (cartItems.length > 1) {
-      // 多个商品，显示第一个商品名称 + “等X件商品”
+      // 多道菜，显示第一道菜名 + “等X道菜”
       const firstName = cartItems[0].name;
-      const summary = `${firstName}等${cartItems.length}件商品`;
+      const summary = `${firstName}等${cartItems.length}道菜`;
       return summary.substring(0, 20);
     }
     
@@ -642,15 +693,15 @@ Page({
     return detail;
   },
 
-  // 结算
+  // 提交点餐
   onCheckout() {
     if (this.data.cartCount === 0) {
       return;
     }
     
     wx.showModal({
-      title: '确认订单',
-      content: `共 ${this.data.cartCount} 件商品，合计 ￥${this.data.totalPrice.toFixed(2)}`,
+      title: '确认点餐',
+      content: `共 ${this.data.cartCount} 道菜，确认提交给掌勺人？`,
       success: (res) => {
         if (res.confirm) {
           this.submitOrder();
@@ -659,103 +710,101 @@ Page({
     });
   },
 
-  // 提交订单并发送订单通知
+  // 提交订单并保存到云数据库
   submitOrder() {
     const orderNo = this.generateOrderNo();
-    const productName = this.getOrderDetail(); // 简短商品名称（用于订阅消息，最多20字符）
+    const productName = this.getOrderDetail(); // 简短菜品名称（用于订单列表预览）
     const fullOrderDetail = this.getFullOrderDetail(); // 完整订单详情（用于日志）
-    const totalPrice = this.data.totalPrice.toFixed(2);
     const cartCount = this.data.cartCount;
     
-    console.log('订单信息:', { orderNo, productName, fullOrderDetail, totalPrice, cartCount });
+    console.log('订单信息:', { orderNo, productName, fullOrderDetail, cartCount });
     
-    // 直接发送订单通知（不再请求用户授权订阅）
-    this.sendOrderNotice(orderNo, productName, totalPrice, cartCount);
+    // 保存订单（不再发送订阅消息，提交后引导用户把订单页分享给掌勺人）
+    this.sendOrderNotice(orderNo, productName, cartCount);
   },
 
-  // 发送订单通知给管理员（通过云函数）
-  sendOrderNotice(orderNo, orderDetail, totalPrice, cartCount) {
+  // 保存订单到云数据库（通过云函数）
+  sendOrderNotice(orderNo, orderDetail, cartCount) {
     wx.showLoading({ title: '提交中...' });
     
     // 获取当前时间（格式：YYYY-MM-DD HH:mm:ss）
     const now = new Date();
     const orderTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     
-    // 获取购物车中的商品列表（包含完整信息）
+    // 获取购物车中的菜品列表（包含完整信息）
     const items = this.data.cartItems.map(item => ({
       id: item.id,
       name: item.name,
-      price: item.price,
       cartCount: item.cartCount,
-      image: item.image || '',
-      spec: item.spec || '常规规格'
+      image: item.image || ''
     }));
     
     console.log('订单时间:', orderTime);
-    console.log('商品列表:', items);
+    console.log('菜品列表:', items);
     
-    // 调用云函数发送订阅消息
+    // 调用云函数保存订单
     wx.cloud.callFunction({
       name: 'sendOrderNotice',
       data: {
         orderNo: orderNo,
         orderDetail: orderDetail,
-        items: items, // 传递完整的商品列表
-        totalPrice: totalPrice,
+        items: items, // 传递完整的菜品列表
         cartCount: cartCount,
-        orderTime: orderTime
-        // templateId 在云函数中配置
+        orderTime: orderTime,
+        ownerId: this.data.ownerId // 订单归属的菜单主人
       },
       success: res => {
-        console.log('订阅消息发送成功:', res);
+        console.log('订单保存成功:', res);
         wx.hideLoading();
-        this.orderSubmitSuccess();
+        this.orderSubmitSuccess(orderNo, orderTime, items);
       },
       fail: err => {
-        console.error('订阅消息发送失败:', err);
+        console.error('订单保存失败:', err);
         wx.hideLoading();
-        // 即使发送失败，订单仍然提交成功
-        this.orderSubmitSuccess();
+        // 即使保存失败，也先缓存到本地，不阻断流程
+        this.orderSubmitSuccess(orderNo, orderTime, items);
       }
     });
   },
 
-  // 订单提交成功处理
-  orderSubmitSuccess() {
-    wx.showToast({
-      title: '订单已提交',
-      icon: 'success',
-      duration: 2000
-    });
+  // 订单提交成功：引导跳转订单详情页，把点单信息分享给掌勺人
+  orderSubmitSuccess(orderNo, orderTime, items) {
     // 保存订单信息到本地缓存（用于离线查看订单详情）
-    this.saveOrderToCache();
+    this.saveOrderToCache(orderNo, orderTime, items);
     // 清空购物车
     this.clearCart();
+
+    // 跳转到订单详情页，在详情页内分享给掌勺人
+    wx.showModal({
+      title: '点单成功 🎉',
+      content: '去订单页把菜单分享给掌勺人，提醒TA开火吧~',
+      confirmText: '去分享',
+      cancelText: '继续逗留',
+      success: (res) => {
+        if (res.confirm) {
+          wx.navigateTo({
+            url: `/packageOrder/pages/order-detail/order-detail?orderNo=${orderNo}&share=1`
+          });
+        } else {
+          wx.showToast({
+            title: '订单已提交',
+            icon: 'success',
+            duration: 2000
+          });
+        }
+      }
+    });
   },
 
   // 保存订单信息到本地缓存
-  saveOrderToCache() {
-    const orderNo = this.generateOrderNo();
-    const orderDetail = this.getFullOrderDetail();
-    const items = this.data.cartItems.map(item => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      cartCount: item.cartCount,
-      image: item.image,
-      spec: item.spec || '常规规格'
-    }));
-    
-    const now = new Date();
-    const orderTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    
+  saveOrderToCache(orderNo, orderTime, items) {
     const orderData = {
       orderNo: orderNo,
-      orderDetail: orderDetail,
+      orderDetail: this.getFullOrderDetail(),
       items: items,
-      totalPrice: this.data.totalPrice.toFixed(2),
       cartCount: this.data.cartCount,
       orderTime: orderTime,
+      ownerId: this.data.ownerId,
       status: 'pending'
     };
     

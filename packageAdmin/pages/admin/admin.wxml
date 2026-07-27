@@ -1,9 +1,9 @@
 <view class="container">
   <!-- 顶部操作栏 -->
   <view class="header">
-    <text class="title">数据管理后台</text>
+    <text class="title">我的菜单</text>
     <view class="actions">
-      <button class="btn btn-small" bindtap="getAdminOpenId">获取 OpenID</button>
+      <button class="btn btn-small" bindtap="previewMenu">预览菜单</button>
       <button class="btn btn-small" bindtap="exportData">导出数据</button>
       <button class="btn btn-small btn-primary" bindtap="importData">导入数据</button>
     </view>
@@ -33,22 +33,17 @@
       <view class="action-buttons">
         <button class="btn btn-small" bindtap="editCategory">编辑分类</button>
         <button class="btn btn-small btn-danger" bindtap="deleteCategory">删除分类</button>
-        <button class="btn btn-small btn-primary" bindtap="addGoods">+ 添加商品</button>
+        <button class="btn btn-small btn-primary" bindtap="addGoods">+ 添加菜品</button>
       </view>
     </view>
 
-    <!-- 商品列表 -->
+    <!-- 菜品列表 -->
     <view class="goods-list">
       <view class="goods-item" wx:for="{{categories[currentTab].goodsList}}" wx:key="id" wx:for-index="goodsIndex">
         <image class="goods-image" src="{{item.image}}" mode="aspectFill" />
         <view class="goods-info">
           <text class="goods-name">{{item.name}}</text>
           <text class="goods-desc">{{item.desc}}</text>
-          <view class="goods-meta">
-            <text class="goods-price">¥{{item.price}}</text>
-            <text class="goods-original-price" wx:if="{{item.originalPrice > item.price}}">¥{{item.originalPrice}}</text>
-            <text class="goods-sales">销量: {{item.sales}}</text>
-          </view>
           <text class="goods-id">ID: {{item.id}}</text>
         </view>
         <view class="goods-actions">
@@ -59,7 +54,7 @@
 
       <!-- 空状态 -->
       <view class="empty-state" wx:if="{{categories[currentTab].goodsList.length === 0}}">
-        <text class="empty-text">暂无商品，点击"添加商品"开始添加</text>
+        <text class="empty-text">暂无菜品，点击"添加菜品"记录你的拿手菜</text>
       </view>
     </view>
   </view>
@@ -77,7 +72,7 @@
       <view class="modal-header">
         <text class="modal-title">
           <van-icon name="{{editMode === 'add' ? 'plus' : 'edit'}}" size="18px" />
-          {{editMode === 'add' ? '添加' : '编辑'}} {{editType === 'category' ? '分类' : '商品'}}
+          {{editMode === 'add' ? '添加' : '编辑'}} {{editType === 'category' ? '分类' : '菜品'}}
         </text>
         <van-icon name="cross" size="20px" color="#999" bindtap="closeModal" />
       </view>
@@ -107,56 +102,43 @@
           />
         </block>
 
-        <!-- 商品表单 -->
+        <!-- 菜品表单 -->
         <block wx:if="{{editType === 'goods'}}">
           <van-field
             value="{{formData.name}}"
             bind:change="onFieldChange"
             data-field="name"
-            label="商品名称"
-            placeholder="请输入商品名称"
+            label="菜品名称"
+            placeholder="请输入菜品名称"
             required
             clearable
             border="{{true}}"
           />
-          
-          <van-field
-            value="{{formData.price}}"
-            bind:change="onFieldChange"
-            data-field="price"
-            label="价格"
-            type="digit"
-            placeholder="0.00"
-            required
-            border="{{true}}"
-          />
-          
-          <van-field
-            value="{{formData.originalPrice}}"
-            bind:change="onFieldChange"
-            data-field="originalPrice"
-            label="原价"
-            type="digit"
-            placeholder="0.00"
-            border="{{true}}"
-          />
 
-          <van-field
-            value="{{formData.sales}}"
-            bind:change="onFieldChange"
-            data-field="sales"
-            label="销量"
-            type="number"
-            placeholder="0"
-            border="{{true}}"
-          />
+          <!-- 菜品图片：拍照/相册上传到云存储 -->
+          <view class="image-upload-section">
+            <view class="image-upload-label">菜品图片</view>
+            <view class="image-upload-body">
+              <view class="image-preview-wrapper" wx:if="{{formData.image}}">
+                <image class="image-preview" src="{{formData.image}}" mode="aspectFill" />
+                <view class="image-remove" catchtap="removeImage">
+                  <van-icon name="cross" size="12px" color="#fff" />
+                </view>
+              </view>
+              <view class="image-upload-btn" bindtap="chooseImage">
+                <van-icon name="photograph" size="24px" color="#999" />
+                <text>{{formData.image ? '重新上传' : '拍照 / 选图'}}</text>
+              </view>
+            </view>
+            <view class="image-upload-tip">把自己炒的菜拍下来，家人看菜下单更有食欲~</view>
+          </view>
 
           <van-field
             value="{{formData.image}}"
             bind:change="onFieldChange"
             data-field="image"
-            label="图片URL"
-            placeholder="https://..."
+            label="图片链接"
+            placeholder="也可直接粘贴图片 URL（选填）"
             clearable
             border="{{true}}"
           />
@@ -165,9 +147,9 @@
             value="{{formData.desc}}"
             bind:change="onFieldChange"
             data-field="desc"
-            label="商品描述"
+            label="菜品描述"
             type="textarea"
-            placeholder="请输入商品描述"
+            placeholder="口味特点、家人喜好等"
             maxlength="200"
             show-word-limit
             autosize="{{true}}"
