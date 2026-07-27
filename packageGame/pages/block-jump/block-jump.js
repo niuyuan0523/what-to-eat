@@ -11,6 +11,7 @@ const DIFF = {
 };
 
 const BEST_KEY = 'blockJumpBest';
+const SFX_GAIN = 1.7;                            // 音效主音量系数（统一提响）
 
 // ==================== 工具函数 ====================
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -104,28 +105,150 @@ Page({
   },
 
   // ==================== 音效（WebAudio 轻量合成） ====================
+  // 获取（或创建）音频上下文
+  getAudioCtx() {
+    if (!this.actx) this.actx = wx.createWebAudioContext();
+    if (this.actx.state === 'suspended' && this.actx.resume) this.actx.resume();
+    return this.actx;
+  },
+
   beep(freq, dur, type = 'sine', vol = 0.15, slide = 0) {
     if (this.destroyed) return;   // 页面销毁后残留定时器不再触发音频，避免重建已关闭的上下文
     try {
-      if (!this.actx) this.actx = wx.createWebAudioContext();
-      const actx = this.actx;
-      if (actx.state === 'suspended' && actx.resume) actx.resume();
+      const actx = this.getAudioCtx();
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type; o.frequency.value = freq;
       if (slide) o.frequency.linearRampToValueAtTime(freq + slide, actx.currentTime + dur);
-      g.gain.setValueAtTime(vol, actx.currentTime);
+      g.gain.setValueAtTime(Math.min(0.55, vol * SFX_GAIN), actx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
       o.connect(g); g.connect(actx.destination);
       o.start(); o.stop(actx.currentTime + dur);
     } catch (e) { /* 忽略音频错误 */ }
   },
-  sfxJump()  { this.beep(300, .25, 'sine', .18, 260); },
-  sfxLand()  { this.beep(200, .12, 'triangle', .2); },
-  sfxMatch() { this.beep(660, .12, 'sine', .18); setTimeout(() => this.beep(880, .16, 'sine', .18), 90); },
+  // 起跳/落地音高带随机浮动，避免每次一模一样
+  sfxJump()  { this.beep(rand(280, 330), .25, 'sine', .18, 260); },
+  sfxLand()  { this.beep(rand(180, 230), .12, 'triangle', .2); },
+  // 同图消除：连击越高音调越高，层层递进更带感（封顶防刺耳）
+  sfxMatch(combo) {
+    const k = Math.min(combo || 1, 6) - 1;
+    const base = 660 * Math.pow(1.12, k);
+    this.beep(base, .12, 'sine', .18);
+    setTimeout(() => this.beep(base * 4 / 3, .16, 'sine', .18), 90);
+  },
   sfxClear() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.beep(f, .14, 'sine', .16), i * 80)); },
-  sfxOver()  { this.beep(220, .3, 'sawtooth', .12, -120); setTimeout(() => this.beep(150, .5, 'sawtooth', .12, -80), 200); },
-  sfxFall()  { this.beep(1000, .65, 'sine', .2, -700); setTimeout(() => this.beep(600, .35, 'triangle', .14, -350), 180); },
+  sfxOver()  { this.beep(220, .3, 'sawtooth', .14, -120); setTimeout(() => this.beep(150, .5, 'sawtooth', .14, -80), 200); },
+  // 坠落尖叫"啊——"：离线合成 PCM 波形后播放（不依赖滤波器/参数调制节点，微信 WebAudio 兼容性最好）
+  buildScreamBuffer(actx) {
+    const sr = actx.sampleRate, dur = 1.0, len = Math.floor(sr * dur);
+    const buf = actx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    let ph1 = 0, ph2 = 0;
+    // 手写带通滤波（"啊"元音共振峰）状态与系数
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    let b0 = 0, b2 = 0, a1c = 0, a2c = 0;
+    const setBP = (fc) => {
+      const w = 2 * Math.PI * fc / sr;
+      const alpha = Math.sin(w) / 2.2, cw = Math.cos(w);   // Q ≈ 1.1
+      const a0 = 1 + alpha;
+      b0 = alpha / a0; b2 = -alpha / a0;
+      a1c = -2 * cw / a0; a2c = (1 - alpha) / a0;
+    };
+    for (let i = 0; i < len; i++) {
+      const t = i / sr, p = t / dur;
+      // 音高包络：倒吸一口气式冲高，再一路下坠
+      let f = t < 0.09
+        ? 620 + 260 * (t / 0.09)
+        : 880 * Math.pow(160 / 880, (t - 0.09) / (dur - 0.09));
+      // 颤音：越掉越慌，抖动逐渐加快
+      f += Math.sin(2 * Math.PI * (9 + 8 * p) * t) * 50;
+      ph1 += f / sr; ph2 += (f * 1.012) / sr;
+      // 双失谐锯齿波
+      const s = (ph1 % 1) * 2 - 1 + ((ph2 % 1) * 2 - 1) * 0.7;
+      // 共振峰下扫（1000→480Hz，每 128 样本更新一次系数）
+      if ((i & 127) === 0) setBP(1000 * Math.pow(0.48, p));
+      const out = b0 * s + b2 * x2 - a1c * y1 - a2c * y2;
+      x2 = x1; x1 = s; y2 = y1; y1 = out;
+      // 音量包络：快速起声 → 喊住不放 → 越掉越远越小声
+      const env = Math.min(1, t / 0.05) * (p < 0.55 ? 1 : Math.pow(1 - (p - 0.55) / 0.45, 1.5));
+      d[i] = Math.tanh(out * 6) * env;   // 软削波增加嘶喊质感
+    }
+    return buf;
+  },
+  sfxFall() {
+    if (this.destroyed) return;
+    try {
+      const actx = this.getAudioCtx();
+      if (!this.screamBuf) this.screamBuf = this.buildScreamBuffer(actx);   // 合成一次后缓存
+      const src = actx.createBufferSource();
+      src.buffer = this.screamBuf;
+      const g = actx.createGain();
+      g.gain.value = 0.55;
+      src.connect(g); g.connect(actx.destination);
+      src.start(actx.currentTime);
+    } catch (e) {
+      // 兜底：合成失败时退回简单下滑惨叫音
+      this.beep(900, .8, 'sawtooth', .3, -650);
+    }
+  },
+  // 同图消除欢呼：随机三选一，避免单调
+  sfxCheer() {
+    if (this.destroyed) return;
+    const n = Math.floor(Math.random() * 3);
+    if (n === 0) this.cheerWhoop();
+    else if (n === 1) this.cheerFanfare();
+    else this.cheerCrowd();
+  },
+  // "呜—呼!" 上扬欢呼
+  cheerWhoop() {
+    this.beep(500, .16, 'sine', .3, 420);
+    setTimeout(() => this.beep(700, .22, 'sine', .32, 500), 140);
+  },
+  // 小号式凯旋琶音
+  cheerFanfare() {
+    [659, 784, 988, 1319].forEach((f, i) =>
+      setTimeout(() => this.beep(f, i === 3 ? .3 : .12, 'square', .14), i * 90));
+  },
+  // 人群"哗——"欢呼（带通滤噪声浪涌，噪声缓冲懒创建一次后复用）
+  cheerCrowd() {
+    if (this.destroyed) return;
+    try {
+      const actx = this.getAudioCtx();
+      const t0 = actx.currentTime, dur = 0.7;
+      if (!this.noiseBuf) {
+        const len = Math.floor(actx.sampleRate * 0.8);
+        this.noiseBuf = actx.createBuffer(1, len, actx.sampleRate);
+        const d = this.noiseBuf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      }
+      const src = actx.createBufferSource(); src.buffer = this.noiseBuf;
+      const bp = actx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 0.6;
+      const g = actx.createGain();
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.exponentialRampToValueAtTime(0.42, t0 + 0.18);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      src.connect(bp); bp.connect(g); g.connect(actx.destination);
+      src.start(t0); src.stop(t0 + dur);
+    } catch (e) { /* 忽略音频错误 */ }
+  },
   sfxPerfect() { this.beep(1200, .15, 'sine', .2, 200); },
+  // 蓄力滴答：随力度升调，节奏感提示当前蓄力程度
+  sfxChargeTick(power) { this.beep(260 + power * 520, .05, 'square', .05); },
+  // 蓄满提示：两声高频短鸣，提醒力度已达上限
+  sfxPowerMax() { this.beep(1320, .08, 'square', .12); setTimeout(() => this.beep(1760, .12, 'square', .12), 90); },
+  // 图案入槽"啵"：同图案越多音调越高（离三连越近越兴奋）
+  sfxPop(count) { this.beep(420 + count * 160, .1, 'triangle', .2, 80); },
+  // 收集槽将满警告：两声急促低鸣
+  sfxWarn() { this.beep(320, .1, 'square', .14); setTimeout(() => this.beep(320, .14, 'square', .14), 150); },
+  // UI 按钮点击：轻快短促
+  sfxClick() { this.beep(600, .07, 'triangle', .12, 120); },
+  // 待机挥手口哨："呼—嘘"两音，俏皮打招呼
+  sfxWhistle() { this.beep(880, .12, 'sine', .08, 220); setTimeout(() => this.beep(1180, .16, 'sine', .08, -160), 150); },
+  // 破纪录喝彩：上行琶音收尾拉长
+  sfxRecord() {
+    [784, 988, 1175, 1568].forEach((f, i) =>
+      setTimeout(() => this.beep(f, i === 3 ? .35 : .12, 'sine', .18), i * 100));
+  },
 
   // ==================== 平台生成 ====================
   // fixed=true 时生成固定高度的起始平台
@@ -247,6 +370,7 @@ Page({
   pushTray(icon, px, py) {
     this.tray.push(icon);
     const count = this.tray.filter(t => t === icon).length;
+    if (count < 3) this.sfxPop(count);   // 入槽"啵"声，越接近三连音调越高
     if (count >= 3) {
       this.setData({ traySlots: this.buildTraySlots(icon) });
       this.sfxClear();
@@ -262,8 +386,11 @@ Page({
     }
     this.setData({ traySlots: this.buildTraySlots() });
     if (this.tray.length >= TRAY_MAX) {
-      setTimeout(() => this.gameOver('📥 收集槽满了！'), 450);
+      setTimeout(() => { this.sfxOver(); this.gameOver('📥 收集槽满了！'); }, 450);
       return false;
+    }
+    if (this.tray.length === TRAY_MAX - 1) {
+      setTimeout(() => this.sfxWarn(), 200);   // 只剩一格：警告音提醒
     }
     return true;
   },
@@ -274,6 +401,8 @@ Page({
     this.state = 'charging';
     this.chargeStart = now();
     this.power = 0;
+    this.lastChargeTick = 0;       // 蓄力滴答计时
+    this.powerMaxPlayed = false;   // 蓄满提示只响一次
     this.setData({ powerShow: true, powerPct: 0 });
   },
 
@@ -347,7 +476,8 @@ Page({
       const bonus = 20 * this.matchCombo;
       this.addScore(bonus, landX, landY - 120, '同图消除 +' + bonus, '#f472b6');
       this.showCombo(this.matchCombo);
-      this.sfxMatch();
+      this.sfxMatch(this.matchCombo);
+      setTimeout(() => this.sfxCheer(), 120);   // 随机欢呼声助兴
       this.spawnParticles(landX, landY - 20, '#f472b6', 22);
       landed.sparkle = 1;
       landed.icon = '✨';                       // 被消除的平台变为空白闪光台
@@ -381,6 +511,7 @@ Page({
     if (this.score > this.best) {
       this.best = this.score;
       wx.setStorageSync(BEST_KEY, this.best);
+      setTimeout(() => this.sfxRecord(), 600);   // 破纪录喝彩，错开结束音
     }
     this.setData({
       phase: 'over',
@@ -473,12 +604,29 @@ Page({
 
   drawPlayer() {
     const { ctx, player, current } = this;
-    let px = player.x, py = player.y, rot = 0, squash = 1;
+    let px = player.x, py = player.y;
+    let pose = 'stand', pt = 0;
 
     if (this.state === 'ready' || this.state === 'charging') {
       // 站立时跟随所在平台高度（高级难度平台会升降）
       if (current) { py = current.y; player.y = py; }
-      if (this.state === 'charging') squash = 1 - this.power * 0.32;   // 蓄力下蹲
+      if (this.state === 'charging') {
+        pose = 'crouch'; pt = this.power;   // 蓄力下蹲后摆臂
+        this.waveT0 = 0;                    // 蓄力打断挥手
+      } else {
+        // 待机时随机转身面向屏幕挥手致意，结束后恢复侧脸站立
+        const tNow = now();
+        if (!this.nextWaveAt) this.nextWaveAt = tNow + rand(2500, 6000);
+        if (this.waveT0) {
+          const el = tNow - this.waveT0;
+          if (el < 1600) { pose = 'wave'; pt = el / 1600; }
+          else { this.waveT0 = 0; this.nextWaveAt = tNow + rand(5000, 10000); }
+        } else if (tNow >= this.nextWaveAt) {
+          this.waveT0 = tNow;
+          pose = 'wave'; pt = 0;
+          this.sfxWhistle();   // 挥手时俏皮口哨打招呼
+        }
+      }
     } else if (this.state === 'jumping' && this.jump) {
       const jump = this.jump;
       const t = Math.min(1, (now() - jump.t0) / jump.dur);
@@ -486,18 +634,18 @@ Page({
       const yEnd = jump.target ? jump.target.y : Math.max(jump.y0, this.groundY);
       px = lerp(jump.x0, jump.x1, t);
       py = lerp(jump.y0, yEnd, t) - jump.h * 4 * t * (1 - t);
-      rot = t * Math.PI * 2;
       player.x = px; player.y = py;
+      pose = 'flight'; pt = t;
       if (t >= 1) { this.jump = null; this.finishJump(px); }
     } else if (this.state === 'falling' && this.fall) {
       const fall = this.fall;
       fall.vy += 22;
       fall.y += fall.vy * 0.016;
-      px = fall.x; py = fall.y; rot = (now() - fall.t0) / 130;
+      px = fall.x; py = fall.y;
+      pose = 'fall'; pt = (now() - fall.t0) / 1000;
     }
 
     const s = player.size * this.S + 6;
-    const sh = s * squash, sw = s * (2 - squash);
     ctx.save();
     // 影子（投在目标/所在平台顶面上）
     const surfY = (this.state === 'jumping' && this.jump)
@@ -507,23 +655,162 @@ Page({
       const airRatio = Math.max(0, 1 - (surfY - py) / 200);
       ctx.fillStyle = `rgba(0,0,0,${0.25 * airRatio})`;
       ctx.beginPath();
-      ctx.ellipse(px - this.camX, surfY + 4, sw * 0.55 * airRatio + 6, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(px - this.camX, surfY + 4, s * 0.55 * airRatio + 6, 6, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.translate(px - this.camX, py - sh / 2);
-    ctx.rotate(rot);
-    const g = ctx.createLinearGradient(-sw / 2, -sh / 2, sw / 2, sh / 2);
+    ctx.restore();
+
+    this.drawRunner(px - this.camX, py, s, pose, pt);
+  },
+
+  // 跳远小人：根据姿态参数绘制头/躯干/四肢（角度以竖直向下为 0，向前为正）
+  drawRunner(x, y, s, pose, t) {
+    if (pose === 'wave') { this.drawWaver(x, y, s, t); return; }   // 正脸挥手单独绘制
+    const ctx = this.ctx;
+    const H = s * 1.55;                       // 身高
+    const r = s * 0.3;                        // 头半径
+    const limb = Math.max(3, s * 0.13);       // 四肢粗细
+
+    // 默认站姿（待机轻微摆动）
+    let lean = 0, crouch = 0;
+    let armF = 0.25, elbF = 0.1, armB = -0.25, elbB = -0.1;
+    let hipF = 0.12, kneeF = -0.08, hipB = -0.12, kneeB = -0.08;
+
+    if (pose === 'stand') {
+      const w = Math.sin(now() / 420) * 0.06;
+      armF = 0.22 + w; armB = -0.22 - w;
+    } else if (pose === 'crouch') {
+      // 蓄力：前倾屈膝，双臂后摆蓄势
+      crouch = t;
+      lean = 0.5 * t;
+      armF = -1.5 * t; elbF = -0.35 * t;
+      armB = -1.3 * t; elbB = -0.35 * t;
+      hipF = 0.95 * t; kneeF = -1.75 * t;
+      hipB = 0.75 * t; kneeB = -1.65 * t;
+    } else if (pose === 'flight') {
+      // 起跳展体 → 空中收腹 → 伸腿落地（经典跳远动作）
+      const u = Math.max(0, Math.min(1, (t - 0.3) / 0.45));
+      lean = lerp(-0.18, 0.32, u);
+      armF = lerp(2.7, 0.9, u);  elbF = lerp(0.4, 0.25, u);
+      armB = lerp(2.2, 1.15, u); elbB = lerp(0.5, 0.25, u);
+      hipF = lerp(1.35, 1.2, u); kneeF = lerp(-1.7, -0.3, u);
+      hipB = lerp(-0.9, 1.0, u); kneeB = lerp(0.45, -0.45, u);
+    } else if (pose === 'fall') {
+      // 坠落：惊慌挥舞四肢
+      lean = Math.sin(t * 9) * 0.4;
+      armF = 2.9 + Math.sin(t * 13) * 0.45;
+      armB = 2.5 - Math.sin(t * 13) * 0.45;
+      hipF = 0.7 + Math.sin(t * 11) * 0.4;  kneeF = -0.9;
+      hipB = -0.5 - Math.sin(t * 11) * 0.3; kneeB = -0.6;
+    }
+
+    // 骨骼长度
+    const legU = H * 0.26, legL = H * 0.24;
+    const torso = H * 0.34 * (1 - 0.18 * crouch);
+    const armU = H * 0.22, armL = H * 0.18;
+    // 髆部离地高度（下蹲时降低）
+    const hipH = (legU + legL) * (1 - 0.4 * crouch);
+
+    ctx.save();
+    ctx.translate(x, y - hipH);
+    ctx.rotate(lean);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // 两段式肢体：从 (x0,y0) 出发，先转 a1 画 l1，再相对转 a2 画 l2
+    const seg = (x0, y0, a1, l1, a2, l2, color, w) => {
+      const x1 = x0 + Math.sin(a1) * l1, y1 = y0 + Math.cos(a1) * l1;
+      const x2 = x1 + Math.sin(a1 + a2) * l2, y2 = y1 + Math.cos(a1 + a2) * l2;
+      ctx.strokeStyle = color; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    };
+
+    // 远侧肢体（深色，在躯干后方）
+    seg(0, -torso, armB, armU, elbB, armL, '#4338ca', limb);
+    seg(0, 0, hipB, legU, kneeB, legL, '#4338ca', limb);
+
+    // 躯干（保留原主题蓝色渐变）
+    const g = ctx.createLinearGradient(0, -torso, 0, 0);
     g.addColorStop(0, '#38bdf8'); g.addColorStop(1, '#6366f1');
-    ctx.fillStyle = g;
-    this.roundRect(-sw / 2, -sh / 2, sw, sh, 8);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.stroke();
-    // 表情
+    ctx.strokeStyle = g; ctx.lineWidth = limb * 2.1;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -torso); ctx.stroke();
+
+    // 近侧肢体（亮色）
+    seg(0, 0, hipF, legU, kneeF, legL, '#6366f1', limb);
+    seg(0, -torso, armF, armU, elbF, armL, '#38bdf8', limb);
+
+    // 头部
+    const headY = -torso - r * 1.05;
+    ctx.fillStyle = '#ffd7a8';
+    ctx.beginPath(); ctx.arc(0, headY, r, 0, Math.PI * 2); ctx.fill();
+    // 运动发带
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = limb * 0.8;
+    ctx.beginPath(); ctx.arc(0, headY, r, -Math.PI * 0.95, -Math.PI * 0.3); ctx.stroke();
+    // 面向前方的眼睛与微笑
     ctx.fillStyle = '#0f172a';
-    ctx.beginPath(); ctx.arc(-sw * 0.18, -sh * 0.1, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(sw * 0.18, -sh * 0.1, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(0, sh * 0.08, 6, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(r * 0.42, headY - r * 0.12, limb * 0.35, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(r * 0.3, headY + r * 0.3, r * 0.32, 0.1 * Math.PI, 0.7 * Math.PI); ctx.stroke();
+
+    ctx.restore();
+  },
+
+  // 正脸挥手致意：面向屏幕站立，一只手举高摆动；t 为 0~1 的动作进度
+  drawWaver(x, y, s, t) {
+    const ctx = this.ctx;
+    const H = s * 1.55, r = s * 0.3;
+    const limb = Math.max(3, s * 0.13);
+    const legU = H * 0.26, legL = H * 0.24;
+    const torso = H * 0.34;
+    const armU = H * 0.22, armL = H * 0.18;
+    const hw = r * 0.55;                                          // 肩/髆半宽
+    // 节奏：举起(前 15%) → 挥动 → 放下(后 15%)
+    const lift = Math.min(1, Math.min(t, 1 - t) / 0.15);
+    const swing = Math.sin(t * Math.PI * 7) * 0.5 * lift;         // 左右摆腕
+
+    ctx.save();
+    ctx.translate(x, y - legU - legL);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const seg = (x0, y0, a1, l1, a2, l2, color, w) => {
+      const x1 = x0 + Math.sin(a1) * l1, y1 = y0 + Math.cos(a1) * l1;
+      const x2 = x1 + Math.sin(a1 + a2) * l2, y2 = y1 + Math.cos(a1 + a2) * l2;
+      ctx.strokeStyle = color; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    };
+
+    // 双腿正面站立，微微分开
+    seg(-hw * 0.7, 0, -0.06, legU, 0, legL, '#4f46e5', limb);
+    seg(hw * 0.7, 0, 0.06, legU, 0, legL, '#4f46e5', limb);
+
+    // 躯干（正面略宽）
+    const g = ctx.createLinearGradient(0, -torso, 0, 0);
+    g.addColorStop(0, '#38bdf8'); g.addColorStop(1, '#6366f1');
+    ctx.strokeStyle = g; ctx.lineWidth = limb * 2.5;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -torso); ctx.stroke();
+
+    // 左臂自然下垂
+    seg(-hw, -torso, -0.28, armU, -0.12, armL, '#38bdf8', limb);
+    // 右臂从下垂平滑举起至高处挥动，结束时再放下
+    const armA = lerp(0.25, 2.75, lift) + swing * 0.25;
+    const elbA = lerp(0.1, 0.55, lift) + swing;
+    seg(hw, -torso, armA, armU, elbA, armL, '#38bdf8', limb);
+
+    // 头部（正脸）
+    const headY = -torso - r * 1.05;
+    ctx.fillStyle = '#ffd7a8';
+    ctx.beginPath(); ctx.arc(0, headY, r, 0, Math.PI * 2); ctx.fill();
+    // 发带
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = limb * 0.8;
+    ctx.beginPath(); ctx.arc(0, headY, r, -Math.PI * 0.9, -Math.PI * 0.1); ctx.stroke();
+    // 双眼 + 开心大微笑
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath(); ctx.arc(-r * 0.35, headY - r * 0.12, limb * 0.35, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.35, headY - r * 0.12, limb * 0.35, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(0, headY + r * 0.22, r * 0.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
     ctx.restore();
   },
 
@@ -566,6 +853,15 @@ Page({
       if (Math.abs(pct - this.data.powerPct) >= 2 || pct >= 100) {
         this.setData({ powerPct: pct });
       }
+      // 蓄力滴答：力度越大节奏越快、音调越高
+      if (this.power < 1 && t - this.lastChargeTick >= 170 - this.power * 100) {
+        this.lastChargeTick = t;
+        this.sfxChargeTick(this.power);
+      }
+      if (this.power >= 1 && !this.powerMaxPlayed) {
+        this.powerMaxPlayed = true;
+        this.sfxPowerMax();
+      }
     }
     // 相机平滑跟随 + 震屏
     this.camX = lerp(this.camX, this.camTarget, 0.08);
@@ -598,13 +894,16 @@ Page({
 
   // 难度选择即开局
   onSelectDiff(e) {
+    this.sfxClick();
     this.difficulty = e.currentTarget.dataset.diff || 'easy';
     this.reset();
   },
   onRetry() {
+    this.sfxClick();
     this.reset();
   },
   onBackMenu() {
+    this.sfxClick();
     this.state = 'idle';
     this.setData({ phase: 'start' });
   },
