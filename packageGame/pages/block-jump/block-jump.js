@@ -147,25 +147,34 @@ Page({
     return p;
   },
 
-  // 在当前平台前方生成两个候选（近 / 远），保证不重叠
-  spawnCandidates() {
+  // 在当前平台前方补足两个候选；keep 为落地后仍位于前方、需保留的旧候选
+  // （保留柱的位置与图案不变，保证落点柱子的连续感）
+  spawnCandidates(keep) {
     const S = this.S;
-    const w1 = rand(66, 94) * S, w2 = rand(66, 94) * S;
-    const d1 = rand(125, 195) * S;
-    const gap = (w1 + w2) / 2 + 26 * S;
-    const d2 = d1 + gap + rand(10, 70) * S;
+    const list = (keep || []).slice().sort((a, b) => a.x - b.x);
+    const fresh = [];
+    let anchor = list.length ? list[list.length - 1] : this.current;
 
-    let i1 = pick(ICONS), i2 = pick(ICONS);
-    // 若两个都不匹配当前图案，有一定概率强制一个匹配，保证可玩性
-    // （current.icon 可能是已消除的 '✨'，不在 ICONS 内时跳过，避免复制出可白嫖连击的空白平台）
-    if (this.current && ICONS.indexOf(this.current.icon) !== -1 &&
-        i1 !== this.current.icon && i2 !== this.current.icon && Math.random() < 0.4) {
-      if (Math.random() < 0.5) i1 = this.current.icon; else i2 = this.current.icon;
+    while (list.length < 2) {
+      const w = rand(66, 94) * S;
+      // 中心距：不小于两柱半宽+间隙，分布与首跳距离一致，保证手感统一
+      const d = Math.max((anchor.w + w) / 2 + 26 * S, rand(125, 195) * S);
+      const p = this.makePlatform(anchor.x + d, pick(ICONS));
+      p.w = w;
+      list.push(p);
+      fresh.push(p);
+      anchor = p;
     }
-    const p1 = this.makePlatform(this.current.x + d1, i1); p1.w = w1;
-    const p2 = this.makePlatform(this.current.x + d2, i2); p2.w = w2;
-    this.candidates = [p1, p2];
-    this.platforms.push(p1, p2);
+
+    // 若所有候选都不匹配当前图案，有一定概率让一个新生成的柱子匹配，保证可玩性
+    // （current.icon 可能是已消除的 '✨'，不在 ICONS 内时跳过；保留柱的图案绝不改动）
+    if (this.current && ICONS.indexOf(this.current.icon) !== -1 && fresh.length &&
+        list.every(p => p.icon !== this.current.icon) && Math.random() < 0.4) {
+      pick(fresh).icon = this.current.icon;
+    }
+
+    this.candidates = list;
+    this.platforms.push(...fresh);
   },
 
   initClouds() {
@@ -312,8 +321,12 @@ Page({
     this.sfxLand();
     this.shake = 4;
 
-    // 另一个候选淡出
-    for (const p of this.candidates) if (p !== landed) p.alpha = 0.99;
+    // 被跳过（身后）的候选淡出；仍在前方的候选保留，维持柱子序列的连续感
+    const keptAhead = [];
+    for (const p of this.candidates) {
+      if (p === landed) continue;
+      if (p.x > landed.x) keptAhead.push(p); else p.alpha = 0.99;
+    }
 
     // 基础分 + 完美落点
     let base = 1;
@@ -349,7 +362,7 @@ Page({
     this.candidates = [];
     // trayOk=false 表示槽已满且无法消除（gameOver 已排定），此时不再生成候选；
     // 注意不能按 tray.length 判定：三连消瞬间长度可能临时为 7，380ms 后才移除
-    if (trayOk) this.spawnCandidates();
+    if (trayOk) this.spawnCandidates(keptAhead);
     this.camTarget = this.current.x - this.vw * 0.26;
 
     this.state = trayOk ? 'ready' : 'over-wait';
