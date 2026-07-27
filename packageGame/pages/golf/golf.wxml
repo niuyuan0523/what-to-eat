@@ -5,19 +5,19 @@
   <canvas type="2d" id="game" class="game-canvas" disable-scroll="true"></canvas>
 
   <!-- 计分板 -->
-  <view class="hud score-box" style="top: {{statusBarHeight + 12}}px;" wx:if="{{phase === 'playing'}}">
+  <view class="hud score-box" style="top: {{hudTop}}px;" wx:if="{{phase === 'playing'}}">
     <view class="score">{{score}}</view>
     <view class="best">总分 {{total}}{{combo >= 2 ? ' · 🔥x' + combo : ''}}</view>
   </view>
 
-  <!-- 球洞信息 -->
-  <view class="hud hole-tag" style="top: {{statusBarHeight + 16}}px;" wx:if="{{phase === 'playing'}}">
+  <!-- 球洞信息：与胶囊按钮下沿对齐，避免重叠 -->
+  <view class="hud hole-tag" style="top: {{hudTop}}px;" wx:if="{{phase === 'playing'}}">
     <text>{{mode === 'daily' ? '每日一洞 ' + holeNo + '/5' : '第 ' + holeNo + ' 洞'}}</text>
     <text class="hole-dist">{{distLabel}} · {{strokeTip}}</text>
   </view>
 
   <!-- 提示横幅（连击 / 运气球 / 差一丢丢） -->
-  <view class="hud banner {{bannerShow ? 'show' : ''}}" style="top: {{statusBarHeight + 90}}px;">
+  <view class="hud banner {{bannerShow ? 'show' : ''}}" style="top: {{hudTop + 78}}px;">
     <view class="banner-main">{{bannerText}}</view>
     <view class="banner-sub" wx:if="{{bannerSub}}">{{bannerSub}}</view>
   </view>
@@ -44,13 +44,14 @@
     <view class="dial-hint">← 滑动调角度 · 按住球场蓄力，松手击球 →</view>
   </view>
 
-  <!-- 返回主页 -->
-  <view class="back-home" catchtap="onBackHome" catchtouchstart="noop" catchtouchend="noop">← 返回主页</view>
-  <!-- 收杆回菜单 -->
-  <view class="back-menu" wx:if="{{phase === 'playing'}}" catchtap="onBackMenu" catchtouchstart="noop" catchtouchend="noop">收杆</view>
+  <!-- 返回主页 / 收杆：不 catch 触摸（会干扰 tap 合成导致按钮失效），
+       改用 data-ui 标记，页面级 onPress/onRelease 识别后跳过蓄力/击球 -->
+  <view class="back-home" data-ui="1" catchtap="onBackHome">← 返回主页</view>
+  <view class="back-menu" wx:if="{{phase === 'playing'}}" data-ui="1" catchtap="onBackMenu">收杆</view>
 
-  <!-- 开始界面：catchtouchstart/end 在遮罩层统一拦截，按钮只绑纯 catchtap -->
-  <view class="overlay" wx:if="{{phase === 'start'}}" catchtouchstart="noop" catchtouchend="noop">
+  <!-- 开始界面：无需拦截触摸冒泡（页面 onPress 有 state 守卫，idle 态为空操作），
+       多余的 catchtouchstart/end 可能干扰按钮 tap 合成，导致整层点击失效 -->
+  <view class="overlay" wx:if="{{phase === 'start'}}">
     <view class="title">一杆进洞</view>
     <view class="sub">差一丢丢 · 史上最"简单"的高尔夫 · 10 秒一局</view>
     <view class="rules">
@@ -82,7 +83,7 @@
   </view>
 
   <!-- 每日一洞结算 -->
-  <view class="overlay" wx:if="{{phase === 'daily-over'}}" catchtouchstart="noop" catchtouchend="noop">
+  <view class="overlay" wx:if="{{phase === 'daily-over'}}">
     <view class="over-title">⛳ 每日一洞 · 结算</view>
     <view class="over-score">{{overScore}}</view>
     <view class="over-best">{{overNew ? '🎉 刷新今日最好成绩！' : '今日最好 ' + overBest}}</view>
@@ -93,8 +94,8 @@
     </view>
   </view>
 
-  <!-- 排行榜面板 -->
-  <view class="rank-mask" wx:if="{{rankShow}}" catchtap="closeRank" catchtouchstart="noop" catchtouchend="noop" catchtouchmove="noop">
+  <!-- 排行榜面板：仅保留 catchtouchmove 防滚动穿透，touchstart/end 无需拦截 -->
+  <view class="rank-mask" wx:if="{{rankShow}}" catchtap="closeRank" catchtouchmove="noop">
     <view class="rank-panel" catchtap="noop">
       <view class="rank-head">
         <text class="rank-title">🏆 全服排行榜</text>

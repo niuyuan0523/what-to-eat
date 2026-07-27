@@ -26,8 +26,8 @@
     >{{item.icon}}</view>
   </view>
 
-  <!-- 返回主页：catchtouchstart/end 阻断冒泡，避免按下时误触发蓄力跳跃 -->
-  <view class="back-home" catchtap="onBackHome" catchtouchstart="noop" catchtouchend="noop">← 返回主页</view>
+  <!-- 返回主页：data-ui 标记，页面级 onPress/onRelease 识别后跳过蓄力，避免误触起跳 -->
+  <view class="back-home" data-ui="1" catchtap="onBackHome">← 返回主页</view>
 
   <!-- 开始界面 -->
   <view class="overlay" wx:if="{{phase === 'start'}}">

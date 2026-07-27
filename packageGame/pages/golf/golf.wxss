@@ -377,6 +377,8 @@ page {
 
 .rank-panel {
   width: 100%;
+  /* 默认 content-box 会让 padding 撑出屏幕，右侧内容（分数/保存按钮）被裁掉 */
+  box-sizing: border-box;
   max-height: 78vh;
   background: #0f172a;
   border-radius: 36rpx 36rpx 0 0;

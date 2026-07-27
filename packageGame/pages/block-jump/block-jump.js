@@ -63,6 +63,10 @@ Page({
     this.actx = null;
 
     this.setData({ best: this.best, traySlots: this.buildTraySlots() });
+  },
+
+  onReady() {
+    // 首帧渲染完成后再查询 canvas 节点：onLoad 时机查询可能取到 null，导致渲染循环永不启动
     this.initCanvas();
   },
 
@@ -74,12 +78,17 @@ Page({
   },
 
   // ==================== Canvas 初始化 ====================
-  initCanvas() {
+  initCanvas(retry) {
     wx.createSelectorQuery()
       .select('#game')
       .fields({ node: true, size: true })
       .exec(res => {
-        if (!res || !res[0] || !res[0].node) return;
+        if (this.destroyed) return;
+        if (!res || !res[0] || !res[0].node) {
+          // 节点尚未挂载：有限重试，避免初始化竞态导致整页交互失效
+          if ((retry || 0) < 10) setTimeout(() => this.initCanvas((retry || 0) + 1), 100);
+          return;
+        }
         const canvas = res[0].node;
         const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
         const dpr = Math.min(info.pixelRatio || 1, 2);
@@ -883,13 +892,20 @@ Page({
   },
 
   // ==================== 输入（触摸） ====================
-  onPress() {
+  onPress(e) {
+    // 触点落在 UI 按钮（data-ui）上：交给按钮的 tap 处理，不进入蓄力
+    if (e && e.target && e.target.dataset && e.target.dataset.ui) return;
     this.startCharge();
   },
-  onRelease() {
+  onRelease(e) {
+    // 松手落在 UI 按钮上：取消蓄力而非替玩家起跳
+    if (e && e.target && e.target.dataset && e.target.dataset.ui) {
+      if (this.state === 'charging') { this.state = 'ready'; this.setData({ powerShow: false, powerPct: 0 }); }
+      return;
+    }
     this.releaseJump();
   },
-  // 空处理器：供 catchtouchstart/catchtouchend 阻断按钮上的触摸冒泡
+  // 空处理器：供 catch 系列绑定阻断事件冒泡
   noop() {},
 
   // 难度选择即开局

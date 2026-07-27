@@ -85,12 +85,21 @@ Page({
     rankLoading: false,
     rankErr: '',
     nick: '',
-    statusBarHeight: 20
+    statusBarHeight: 20,
+    hudTop: 44                 // HUD 顶部基线（胶囊按钮下沿），onLoad 实测后更新
   },
 
   onLoad() {
     const winInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    this.setData({ statusBarHeight: winInfo.statusBarHeight || 20 });
+    // HUD 顶部基线：贴着右上角胶囊按钮下沿，避免与胶囊/系统时间重叠
+    let hudTop = (winInfo.statusBarHeight || 20) + 12;
+    if (wx.getMenuButtonBoundingClientRect) {
+      try {
+        const mb = wx.getMenuButtonBoundingClientRect();
+        if (mb && mb.bottom) hudTop = mb.bottom + 10;
+      } catch (e) { /* 个别环境不支持，退回状态栏高度 */ }
+    }
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 20, hudTop });
 
     // 独立分包可能不经过 app.js 直接进入，云能力需兜底初始化
     this.cloudOk = false;
@@ -122,14 +131,19 @@ Page({
 
     this.particles = []; this.popups = [];
     this.ball = { x: 0, y: 0, vx: 0, vy: 0, spin: 0 };
+    this.camX = 0;             // 相机水平偏移：球越过屏幕右缘时跟随，保证球与洞同屏
     this.trail = [];
     this.helper = null;
-
-    this.initCanvas();
 
     // 窗口尺寸变化（iPad 分屏/旋转）时重测滑轨位置，避免角度映射错位
     this.resizeHandler = () => this.measureDial();
     if (wx.onWindowResize) wx.onWindowResize(this.resizeHandler);
+  },
+
+  onReady() {
+    // 首帧渲染完成后再查询 canvas 节点：onLoad 时机查询可能取到 null，
+    // 导致渲染循环永不启动（表现为场景不绘制、切皮肤无变化、开局无球场）
+    this.initCanvas();
   },
 
   onUnload() {
@@ -147,12 +161,17 @@ Page({
   },
 
   // ==================== Canvas 初始化 ====================
-  initCanvas() {
+  initCanvas(retry) {
     wx.createSelectorQuery()
       .select('#game')
       .fields({ node: true, size: true })
       .exec(res => {
-        if (!res || !res[0] || !res[0].node) return;
+        if (this.destroyed) return;
+        if (!res || !res[0] || !res[0].node) {
+          // 节点尚未挂载：有限重试，避免初始化竞态导致整页交互失效
+          if ((retry || 0) < 10) setTimeout(() => this.initCanvas((retry || 0) + 1), 100);
+          return;
+        }
         const canvas = res[0].node;
         const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
         const dpr = Math.min(info.pixelRatio || 1, 2);
@@ -311,6 +330,7 @@ Page({
     this.helper = null;
     this.luckPlan = false; this.forceHole = false;
     this.sinking = 0;
+    this.camX = 0;             // 新一洞相机复位
     this.state = 'aim';
     this.setData({
       holeNo: this.holeIdx + 1,
@@ -331,7 +351,9 @@ Page({
     if (deg !== this.data.angleDeg) this.setData({ angleDeg: deg });
   },
 
-  onPress() {
+  onPress(e) {
+    // 触点落在角落按钮（data-ui）上：交给按钮的 tap 处理，不进入蓄力
+    if (e && e.target && e.target.dataset && e.target.dataset.ui) return;
     if (this.state !== 'aim') return;
     this.state = 'charging';
     this.chargeStart = now();
@@ -340,7 +362,9 @@ Page({
     this.setData({ powerShow: true, powerPct: 0 });
   },
 
-  onRelease() {
+  onRelease(e) {
+    // 松手落在角落按钮上：取消蓄力而非替玩家击球
+    if (e && e.target && e.target.dataset && e.target.dataset.ui) { this.cancelCharge(); return; }
     if (this.state !== 'charging') return;
     this.setData({ powerShow: false });
     // 用松手瞬间的实时力量：避免按下后未经过渲染帧就松手时，拿到上一杆残留的 this.power
@@ -534,7 +558,8 @@ Page({
     if (this.destroyed || this.state === 'idle') return;
     this.state = 'wait';
     let gain = 0;
-    const bx = clamp(this.ball.x, 40, this.vw - 40);
+    // 飘字位置按相机视野 clamp，球在屏幕右缘外时飘字也可见
+    const bx = clamp(this.ball.x, this.camX + 40, this.camX + this.vw - 40);
 
     if (outcome === 'ace') {
       this.combo++;
@@ -944,13 +969,25 @@ Page({
         ctx.fillRect(0, 0, this.vw, 44);
         ctx.fillRect(0, this.vh - 44, this.vw, 44);
       } else {
+        const ctx = this.ctx;
+        // 相机跟随：球越过屏幕右缘（尚未出界）时平移视角，让球和球洞始终同屏；
+        // 世界层（洞/球/瞄准线/粒子）整体平移，背景与 WXML HUD 不动
+        const camTarget = Math.max(0, this.ball.x + 70 * this.S - this.vw);
+        this.camX += (camTarget - this.camX) * Math.min(1, dt * 6);
+        if (camTarget === 0 && this.camX < 0.5) this.camX = 0;
+        ctx.save();
+        ctx.translate(-this.camX, 0);
         this.drawHole();
         this.drawAim();
         this.drawBall(this.ball.x, this.ball.y, this.sinking);
         this.drawHelperIcon();
+        this.drawFx(dt);          // 粒子/飘字是世界坐标，跟随相机平移
+        ctx.restore();
       }
+    } else {
+      this.drawFx(dt);
     }
-    this.drawFx(dt);
+    if (replaying) this.drawFx(dt);
   },
 
   // ==================== UI 事件 ====================
