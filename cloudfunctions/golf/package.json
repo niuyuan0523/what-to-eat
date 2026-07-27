@@ -1,0 +1,9 @@
+{
+  "name": "golf",
+  "version": "1.0.0",
+  "description": "一杆进洞小游戏：战绩上报与全服排行榜",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

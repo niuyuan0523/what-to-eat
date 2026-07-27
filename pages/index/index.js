@@ -20,6 +20,13 @@ Page({
     });
   },
 
+  // 进入「一杆进洞」小游戏（独立分包）
+  goGolf() {
+    wx.navigateTo({
+      url: '/packageGame/pages/golf/golf'
+    });
+  },
+
   // 进入「我的菜单」模块（独立分包），每个用户维护自己的专属菜单
   goAdmin() {
     wx.navigateTo({

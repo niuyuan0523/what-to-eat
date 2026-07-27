@@ -35,7 +35,8 @@
       "name": "game",
       "independent": true,
       "pages": [
-        "pages/block-jump/block-jump"
+        "pages/block-jump/block-jump",
+        "pages/golf/golf"
       ]
     }
   ],

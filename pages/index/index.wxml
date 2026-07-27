@@ -37,6 +37,15 @@
       <view class="module-arrow">›</view>
     </view>
 
+    <view class="module-card golf" bindtap="goGolf">
+      <view class="module-icon">⛳</view>
+      <view class="module-info">
+        <view class="module-name">一杆进洞</view>
+        <view class="module-sub">滑动瞄准 · 蓄力击球 · 全服排行榜</view>
+      </view>
+      <view class="module-arrow">›</view>
+    </view>
+
     <view class="module-card admin" bindtap="goAdmin">
       <view class="module-icon">📖</view>
       <view class="module-info">

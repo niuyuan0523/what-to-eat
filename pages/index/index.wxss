@@ -73,6 +73,10 @@
   background: #f3ecff;
 }
 
+.module-card.golf .module-icon {
+  background: #e8f7e6;
+}
+
 .module-info {
   flex: 1;
   margin-left: 28rpx;

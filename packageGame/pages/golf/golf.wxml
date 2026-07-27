@@ -1,0 +1,143 @@
+<!-- touchcancel（来电/通知栏打断）取消蓄力，不替玩家击球 -->
+<view class="page" bindtouchstart="onPress" bindtouchend="onRelease" bindtouchcancel="onCancelPress">
+
+  <!-- 游戏画布 -->
+  <canvas type="2d" id="game" class="game-canvas" disable-scroll="true"></canvas>
+
+  <!-- 计分板 -->
+  <view class="hud score-box" style="top: {{statusBarHeight + 12}}px;" wx:if="{{phase === 'playing'}}">
+    <view class="score">{{score}}</view>
+    <view class="best">总分 {{total}}{{combo >= 2 ? ' · 🔥x' + combo : ''}}</view>
+  </view>
+
+  <!-- 球洞信息 -->
+  <view class="hud hole-tag" style="top: {{statusBarHeight + 16}}px;" wx:if="{{phase === 'playing'}}">
+    <text>{{mode === 'daily' ? '每日一洞 ' + holeNo + '/5' : '第 ' + holeNo + ' 洞'}}</text>
+    <text class="hole-dist">{{distLabel}} · {{strokeTip}}</text>
+  </view>
+
+  <!-- 提示横幅（连击 / 运气球 / 差一丢丢） -->
+  <view class="hud banner {{bannerShow ? 'show' : ''}}" style="top: {{statusBarHeight + 90}}px;">
+    <view class="banner-main">{{bannerText}}</view>
+    <view class="banner-sub" wx:if="{{bannerSub}}">{{bannerSub}}</view>
+  </view>
+
+  <!-- 慢动作回放标记 -->
+  <view class="hud replay-tag {{replayShow ? 'show' : ''}}">🎬 慢动作回放 · 差一丢丢……</view>
+
+  <!-- 蓄力条 -->
+  <view class="hud power-wrap {{powerShow ? 'show' : ''}}">
+    <view class="power-bar" style="width: {{powerPct}}%;"></view>
+  </view>
+
+  <!-- 角度滑轨：catch 阻断冒泡，滑动不触发蓄力 -->
+  <view
+    class="aim-dial {{phase === 'playing' ? '' : 'hidden'}}"
+    catchtouchstart="onAimTouch"
+    catchtouchmove="onAimTouch"
+    catchtouchend="noop"
+  >
+    <view class="dial-track">
+      <view class="dial-fill" style="width: {{(angleDeg - 15) / 60 * 100}}%;"></view>
+      <view class="dial-thumb" style="left: {{(angleDeg - 15) / 60 * 100}}%;">{{angleDeg}}°</view>
+    </view>
+    <view class="dial-hint">← 滑动调角度 · 按住球场蓄力，松手击球 →</view>
+  </view>
+
+  <!-- 返回主页 -->
+  <view class="back-home" catchtap="onBackHome" catchtouchstart="noop" catchtouchend="noop">← 返回主页</view>
+  <!-- 收杆回菜单 -->
+  <view class="back-menu" wx:if="{{phase === 'playing'}}" catchtap="onBackMenu" catchtouchstart="noop" catchtouchend="noop">收杆</view>
+
+  <!-- 开始界面：catchtouchstart/end 在遮罩层统一拦截，按钮只绑纯 catchtap -->
+  <view class="overlay" wx:if="{{phase === 'start'}}" catchtouchstart="noop" catchtouchend="noop">
+    <view class="title">一杆进洞</view>
+    <view class="sub">差一丢丢 · 史上最"简单"的高尔夫 · 10 秒一局</view>
+    <view class="rules">
+      <view>🎯 <text class="hl">滑动</text>调整角度，<text class="hl">按住</text>球场蓄力，松手击球</view>
+      <view>⛳ 一杆进洞 <text class="hl">+100</text>，连续进洞有<text class="hl">连击加成</text></view>
+      <view>😤 停在洞边 1 厘米内 <text class="hl">+50</text>，还送慢动作回放</view>
+      <view>🦋 极低概率触发<text class="hl">蝴蝶助攻</text>，天选之子直接进洞</view>
+    </view>
+
+    <!-- 球场皮肤 -->
+    <view class="skin-row">
+      <view
+        wx:for="{{skinList}}"
+        wx:key="key"
+        class="skin-item {{skin === item.key ? 'active' : ''}}"
+        data-skin="{{item.key}}"
+        catchtap="onSelectSkin"
+      >
+        <text class="skin-icon">{{item.icon}}</text>
+        <text class="skin-name">{{item.label}}</text>
+      </view>
+    </view>
+
+    <view class="btn-col">
+      <view class="btn primary" catchtap="startFree">🏌️ 随便打打</view>
+      <view class="btn daily" catchtap="startDaily">⛳ 每日一洞（全服冲榜）</view>
+      <view class="btn ghost" catchtap="openRank">🏆 排行榜</view>
+    </view>
+  </view>
+
+  <!-- 每日一洞结算 -->
+  <view class="overlay" wx:if="{{phase === 'daily-over'}}" catchtouchstart="noop" catchtouchend="noop">
+    <view class="over-title">⛳ 每日一洞 · 结算</view>
+    <view class="over-score">{{overScore}}</view>
+    <view class="over-best">{{overNew ? '🎉 刷新今日最好成绩！' : '今日最好 ' + overBest}}</view>
+    <view class="btn-row">
+      <view class="btn primary" catchtap="onRetryDaily">再冲一次</view>
+      <view class="btn ghost" catchtap="openRank">看排名</view>
+      <view class="btn ghost" catchtap="onBackMenu">回菜单</view>
+    </view>
+  </view>
+
+  <!-- 排行榜面板 -->
+  <view class="rank-mask" wx:if="{{rankShow}}" catchtap="closeRank" catchtouchstart="noop" catchtouchend="noop" catchtouchmove="noop">
+    <view class="rank-panel" catchtap="noop">
+      <view class="rank-head">
+        <text class="rank-title">🏆 全服排行榜</text>
+        <text class="rank-close" catchtap="closeRank">✕</text>
+      </view>
+
+      <!-- 昵称设置 -->
+      <view class="nick-row">
+        <input
+          class="nick-input"
+          type="nickname"
+          placeholder="{{nick ? nick : '设置上榜昵称'}}"
+          bindinput="onNickInput"
+        />
+        <view class="nick-save" catchtap="saveNick">保存</view>
+      </view>
+
+      <!-- 榜单 tab -->
+      <scroll-view class="rank-tabs" scroll-x enable-flex>
+        <view
+          wx:for="{{boards}}"
+          wx:key="key"
+          class="rank-tab {{rankTab === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          catchtap="onRankTab"
+        >{{item.label}}</view>
+      </scroll-view>
+
+      <view class="rank-body">
+        <view wx:if="{{rankLoading}}" class="rank-tip">加载中…</view>
+        <view wx:elif="{{rankErr}}" class="rank-tip">{{rankErr}}</view>
+        <view wx:elif="{{rankList.length === 0}}" class="rank-tip">榜上还没人，快来抢第一！</view>
+        <view wx:else>
+          <view wx:for="{{rankList}}" wx:key="index" class="rank-item {{index < 3 ? 'top' + (index + 1) : ''}}">
+            <text class="rank-no">{{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}}</text>
+            <text class="rank-name">{{item.nickname || '神秘球友'}}</text>
+            <text class="rank-val">{{item.value}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="rank-mine" wx:if="{{myRankText}}">{{myRankText}}</view>
+    </view>
+  </view>
+
+</view>

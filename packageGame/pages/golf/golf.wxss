@@ -1,0 +1,515 @@
+/* 一杆进洞：全屏 Canvas 游戏页面样式 */
+page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #14532d;
+}
+
+.page {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ---------- HUD ---------- */
+.hud {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.score-box {
+  left: 28rpx;
+  background: rgba(15, 23, 42, .55);
+  border: 1rpx solid rgba(255, 255, 255, .12);
+  border-radius: 28rpx;
+  padding: 16rpx 32rpx;
+  color: #fff;
+}
+
+.score-box .score {
+  font-size: 52rpx;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.score-box .best {
+  font-size: 24rpx;
+  color: #cbd5e1;
+}
+
+.hole-tag {
+  right: 28rpx;
+  background: rgba(15, 23, 42, .55);
+  border: 1rpx solid rgba(255, 255, 255, .12);
+  border-radius: 24rpx;
+  padding: 14rpx 28rpx;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hole-dist {
+  font-size: 22rpx;
+  font-weight: 400;
+  color: #a7f3d0;
+  margin-top: 4rpx;
+}
+
+/* 提示横幅 */
+.banner {
+  left: 50%;
+  transform: translateX(-50%) scale(.7);
+  text-align: center;
+  background: linear-gradient(135deg, rgba(251, 191, 36, .95), rgba(249, 115, 22, .95));
+  color: #fff;
+  padding: 18rpx 44rpx;
+  border-radius: 24rpx;
+  box-shadow: 0 10rpx 36rpx rgba(249, 115, 22, .4);
+  opacity: 0;
+  transition: opacity .22s, transform .22s;
+}
+
+.banner.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.banner-main {
+  font-size: 40rpx;
+  font-weight: 900;
+}
+
+.banner-sub {
+  font-size: 24rpx;
+  margin-top: 4rpx;
+  opacity: .92;
+}
+
+/* 慢放标记 */
+.replay-tag {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, .68);
+  color: #fbbf24;
+  font-size: 30rpx;
+  font-weight: 800;
+  letter-spacing: 2rpx;
+  padding: 14rpx 36rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(251, 191, 36, .5);
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+.replay-tag.show {
+  opacity: 1;
+  animation: blink 0.9s infinite;
+}
+
+@keyframes blink {
+  50% { opacity: .55; }
+}
+
+/* 蓄力条 */
+.power-wrap {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 320rpx;
+  width: 480rpx;
+  height: 30rpx;
+  background: rgba(15, 23, 42, .5);
+  border: 2rpx solid rgba(255, 255, 255, .3);
+  border-radius: 999rpx;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.power-wrap.show {
+  opacity: 1;
+}
+
+.power-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80, #fbbf24, #ef4444);
+  border-radius: 999rpx;
+}
+
+/* ---------- 角度滑轨 ---------- */
+.aim-dial {
+  position: fixed;
+  z-index: 12;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(90rpx + env(safe-area-inset-bottom));
+  width: 600rpx;
+  padding: 20rpx 0;
+  transition: opacity .2s;
+}
+
+.aim-dial.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dial-track {
+  position: relative;
+  height: 18rpx;
+  background: rgba(15, 23, 42, .45);
+  border: 1rpx solid rgba(255, 255, 255, .25);
+  border-radius: 999rpx;
+}
+
+.dial-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  border-radius: 999rpx;
+}
+
+.dial-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 86rpx;
+  text-align: center;
+  padding: 8rpx 0;
+  background: #fff;
+  color: #1e293b;
+  font-size: 26rpx;
+  font-weight: 800;
+  border-radius: 999rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, .3);
+}
+
+.dial-hint {
+  margin-top: 18rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, .85);
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, .4);
+}
+
+/* ---------- 角落按钮 ---------- */
+.back-home,
+.back-menu {
+  position: fixed;
+  z-index: 20;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  background: rgba(15, 23, 42, .5);
+  border: 1rpx solid rgba(255, 255, 255, .18);
+  color: #fff;
+  font-size: 24rpx;
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+}
+
+.back-home { left: 24rpx; }
+.back-menu { right: 24rpx; }
+
+/* ---------- 遮罩层 ---------- */
+.overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 48rpx;
+  background: rgba(2, 6, 23, .62);
+  backdrop-filter: blur(6rpx);
+}
+
+.title {
+  font-size: 76rpx;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 8rpx 30rpx rgba(74, 222, 128, .5);
+}
+
+.sub {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  color: #a7f3d0;
+}
+
+.rules {
+  margin-top: 40rpx;
+  width: 100%;
+  max-width: 620rpx;
+  background: rgba(255, 255, 255, .08);
+  border: 1rpx solid rgba(255, 255, 255, .12);
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  color: #e2e8f0;
+  font-size: 26rpx;
+  line-height: 2;
+}
+
+.hl {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+/* 皮肤选择 */
+.skin-row {
+  margin-top: 36rpx;
+  display: flex;
+  gap: 20rpx;
+}
+
+.skin-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, .08);
+  border: 2rpx solid transparent;
+  color: #cbd5e1;
+}
+
+.skin-item.active {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, .16);
+  color: #fff;
+}
+
+.skin-icon { font-size: 44rpx; }
+.skin-name { font-size: 20rpx; }
+
+/* 按钮 */
+.btn-col {
+  margin-top: 44rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+  width: 100%;
+  max-width: 560rpx;
+}
+
+.btn-row {
+  margin-top: 44rpx;
+  display: flex;
+  gap: 22rpx;
+}
+
+.btn {
+  text-align: center;
+  padding: 24rpx 44rpx;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, .14);
+  border: 1rpx solid rgba(255, 255, 255, .2);
+}
+
+.btn.primary {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: none;
+  box-shadow: 0 10rpx 30rpx rgba(34, 197, 94, .4);
+}
+
+.btn.daily {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  border: none;
+  box-shadow: 0 10rpx 30rpx rgba(245, 158, 11, .4);
+}
+
+.btn.ghost {
+  background: rgba(255, 255, 255, .1);
+}
+
+.btn:active {
+  transform: scale(.96);
+}
+
+/* 结算 */
+.over-title {
+  font-size: 44rpx;
+  font-weight: 800;
+  color: #fff;
+}
+
+.over-score {
+  margin-top: 20rpx;
+  font-size: 120rpx;
+  font-weight: 900;
+  color: #fbbf24;
+  line-height: 1.1;
+}
+
+.over-best {
+  margin-top: 10rpx;
+  font-size: 28rpx;
+  color: #a7f3d0;
+}
+
+/* ---------- 排行榜 ---------- */
+.rank-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  background: rgba(2, 6, 23, .6);
+  display: flex;
+  align-items: flex-end;
+}
+
+.rank-panel {
+  width: 100%;
+  max-height: 78vh;
+  background: #0f172a;
+  border-radius: 36rpx 36rpx 0 0;
+  padding: 32rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+}
+
+.rank-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rank-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #fff;
+}
+
+.rank-close {
+  color: #94a3b8;
+  font-size: 34rpx;
+  padding: 8rpx 16rpx;
+}
+
+.nick-row {
+  margin-top: 24rpx;
+  display: flex;
+  gap: 16rpx;
+}
+
+.nick-input {
+  flex: 1;
+  background: rgba(255, 255, 255, .08);
+  border: 1rpx solid rgba(255, 255, 255, .14);
+  border-radius: 16rpx;
+  padding: 14rpx 24rpx;
+  color: #fff;
+  font-size: 26rpx;
+}
+
+.nick-save {
+  background: #22c55e;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 700;
+  border-radius: 16rpx;
+  padding: 14rpx 32rpx;
+  display: flex;
+  align-items: center;
+}
+
+.rank-tabs {
+  margin-top: 24rpx;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: row;
+  gap: 14rpx;
+}
+
+.rank-tab {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 12rpx 30rpx;
+  margin-right: 14rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, .06);
+}
+
+.rank-tab.active {
+  color: #0f172a;
+  background: #fbbf24;
+  font-weight: 800;
+}
+
+.rank-body {
+  margin-top: 20rpx;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 320rpx;
+}
+
+.rank-tip {
+  text-align: center;
+  color: #64748b;
+  font-size: 26rpx;
+  padding: 60rpx 0;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 16rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, .06);
+}
+
+.rank-item.top1 { background: rgba(251, 191, 36, .12); border-radius: 14rpx; }
+.rank-item.top2 { background: rgba(203, 213, 225, .1); border-radius: 14rpx; }
+.rank-item.top3 { background: rgba(217, 119, 6, .12); border-radius: 14rpx; }
+
+.rank-no {
+  width: 72rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #94a3b8;
+}
+
+.rank-name {
+  flex: 1;
+  margin-left: 12rpx;
+  font-size: 28rpx;
+  color: #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-val {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.rank-mine {
+  margin-top: 18rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: #4ade80;
+  background: rgba(74, 222, 128, .1);
+  border-radius: 16rpx;
+  padding: 14rpx 0;
+}
