@@ -31,9 +31,14 @@ exports.main = async (event, context) => {
     
     if (result.data.length > 0) {
       console.log('订单查询成功', result.data[0])
+      const order = result.data[0]
+      const openid = cloud.getWXContext().OPENID
       return {
         success: true,
-        data: result.data[0],
+        data: order,
+        // 身份标识：掌勺人可流转状态，下单人可取消待处理订单
+        isOwner: order.ownerId === openid,
+        isBuyer: order.buyerOpenId === openid,
         message: '查询成功'
       }
     } else {

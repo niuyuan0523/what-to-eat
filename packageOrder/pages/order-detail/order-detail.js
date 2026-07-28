@@ -14,7 +14,11 @@ Page({
     orderDetail: null,
     loading: true,
     orderStatus: '',
-    showShareTip: false
+    showShareTip: false,
+    // 身份与可执行操作（由 getOrderDetail 云函数返回）
+    isOwner: false,
+    isBuyer: false,
+    statusActions: []      // 掌勺人可用的状态流转按钮
   },
 
   onLoad(options) {
@@ -59,7 +63,10 @@ Page({
           this.setData({
             orderDetail: order,
             loading: false,
-            orderStatus: this.getStatusText(order.status)
+            orderStatus: this.getStatusText(order.status),
+            isOwner: res.result.isOwner === true,
+            isBuyer: res.result.isBuyer === true,
+            statusActions: this.getStatusActions(order.status, res.result.isOwner === true)
           })
         } else {
           // 云端查不到（如刚下单尚未同步），回退到本地缓存
@@ -110,6 +117,67 @@ Page({
       'cancelled': '已取消'
     }
     return statusMap[status] || '待处理'
+  },
+
+  // 掌勺人可执行的状态流转（按做菜流程推进，随时可取消）
+  getStatusActions(status, isOwner) {
+    if (!isOwner) return []
+    const flow = {
+      'pending':   [{ status: 'confirmed', label: '接单', type: 'primary' }],
+      'confirmed': [{ status: 'preparing', label: '开始制作', type: 'primary' }],
+      'preparing': [{ status: 'completed', label: '出餐完成', type: 'primary' }]
+    }
+    const actions = flow[status] || []
+    if (status !== 'completed' && status !== 'cancelled') {
+      actions.push({ status: 'cancelled', label: '取消订单', type: 'default' })
+    }
+    return actions
+  },
+
+  // 掌勺人点击状态流转按钮
+  onStatusAction(e) {
+    const { status, label } = e.currentTarget.dataset
+    wx.showModal({
+      title: '确认操作',
+      content: `确定要「${label}」吗？`,
+      success: (res) => {
+        if (res.confirm) this.updateOrderStatus(status)
+      }
+    })
+  },
+
+  // 下单人取消待处理订单
+  onBuyerCancel() {
+    wx.showModal({
+      title: '取消订单',
+      content: '确定不点了吗？',
+      success: (res) => {
+        if (res.confirm) this.updateOrderStatus('cancelled')
+      }
+    })
+  },
+
+  // 调云函数更新状态并刷新页面（订单记录无 _openid，前端直改会被权限拦截）
+  updateOrderStatus(status) {
+    wx.showLoading({ title: '更新中...' })
+    wx.cloud.callFunction({
+      name: 'updateOrderStatus',
+      data: { orderNo: this.data.orderNo, status: status },
+      success: res => {
+        wx.hideLoading()
+        if (res.result && res.result.success) {
+          wx.showToast({ title: '已更新', icon: 'success' })
+          this.loadOrderDetail(this.data.orderNo)
+        } else {
+          wx.showToast({ title: (res.result && res.result.message) || '更新失败', icon: 'none' })
+        }
+      },
+      fail: err => {
+        console.error('更新订单状态失败', err)
+        wx.hideLoading()
+        wx.showToast({ title: '网络异常，请重试', icon: 'none' })
+      }
+    })
   },
 
   // 刷新订单

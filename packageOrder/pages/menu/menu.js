@@ -92,39 +92,46 @@ Page({
   },
 
   // 加载订单列表（仅当前菜单主人名下的订单）
+  // 订单由云函数写入（记录无 _openid），小程序端直查会被集合权限过滤成空列表，
+  // 必须通过 getOrderList 云函数查询
   loadOrderList() {
     this.setData({ orderLoading: true });
     
-    const db = wx.cloud.database();
-    db.collection('orders')
-      .where({ ownerId: this.data.ownerId })
-      .orderBy('createTime', 'desc')
-      .limit(50)
-      .get({
-        success: res => {
-          console.log('订单列表查询成功', res);
-          const statusMap = {
-            'pending': '待处理',
-            'confirmed': '已确认',
-            'preparing': '制作中',
-            'completed': '已完成',
-            'cancelled': '已取消'
-          };
-          const orderList = res.data.map(item => ({
-            ...item,
-            statusText: statusMap[item.status] || '待处理'
-          }));
-          this.setData({
-            orderList: orderList,
-            orderLoading: false
-          });
-        },
-        fail: err => {
-          console.error('订单列表查询失败', err);
-          // 尝试从本地缓存加载
+    wx.cloud.callFunction({
+      name: 'getOrderList',
+      data: {
+        action: 'list',
+        ownerId: this.data.ownerId
+      },
+      success: res => {
+        console.log('订单列表查询成功', res);
+        const result = res.result || {};
+        if (!result.success) {
           this.loadOrderListFromCache();
+          return;
         }
-      });
+        const statusMap = {
+          'pending': '待处理',
+          'confirmed': '已确认',
+          'preparing': '制作中',
+          'completed': '已完成',
+          'cancelled': '已取消'
+        };
+        const orderList = (result.data || []).map(item => ({
+          ...item,
+          statusText: statusMap[item.status] || '待处理'
+        }));
+        this.setData({
+          orderList: orderList,
+          orderLoading: false
+        });
+      },
+      fail: err => {
+        console.error('订单列表查询失败', err);
+        // 尝试从本地缓存加载
+        this.loadOrderListFromCache();
+      }
+    });
   },
 
   // 从本地缓存加载订单列表（备用方案）
@@ -232,65 +239,56 @@ Page({
   },
 
   // 加载近一个月的点单数据（仅统计当前菜单的订单）
+  // 同订单列表：orders 记录无 _openid，须经云函数查询
   loadSalesData() {
-    const db = wx.cloud.database();
-    const _ = db.command;
-    
-    // 计算一个月前的时间
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    
-    console.log('查询近一个月订单，起始时间:', oneMonthAgo);
-    
-    // 查询近一个月且未取消的订单
-    db.collection('orders')
-      .where({
-        ownerId: this.data.ownerId,
-        createTime: _.gte(oneMonthAgo),
-        status: _.neq('cancelled')
-      })
-      .limit(100)
-      .get({
-        success: res => {
-          console.log('点单量查询成功，订单数:', res.data.length);
-          
-          // 统计每个菜品被点次数
-          const salesMap = {};
-          res.data.forEach(order => {
-            if (order.items && Array.isArray(order.items)) {
-              order.items.forEach(item => {
-                const id = item.id;
-                if (!salesMap[id]) {
-                  salesMap[id] = 0;
-                }
-                salesMap[id] += (item.cartCount || 1);
-              });
-            }
-          });
-          
-          console.log('菜品点单统计:', salesMap);
-          
-          // 更新 categories 中的点单数据
-          const categories = this.data.categories.map(cate => ({
-            ...cate,
-            goodsList: cate.goodsList.map(goods => ({
-              ...goods,
-              sales: salesMap[goods.id] || 0
-            }))
-          }));
-          
-          this.setData({ categories });
-          
-          // 更新分类位置
-          setTimeout(() => {
-            this.updateCategoryTops();
-          }, 300);
-        },
-        fail: err => {
-          console.error('点单量查询失败', err);
-          // 查询失败不影响正常使用
-        }
-      });
+    wx.cloud.callFunction({
+      name: 'getOrderList',
+      data: {
+        action: 'sales',
+        ownerId: this.data.ownerId
+      },
+      success: res => {
+        const result = res.result || {};
+        if (!result.success || !Array.isArray(result.data)) return;
+        console.log('点单量查询成功，订单数:', result.data.length);
+        
+        // 统计每个菜品被点次数
+        const salesMap = {};
+        result.data.forEach(order => {
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              const id = item.id;
+              if (!salesMap[id]) {
+                salesMap[id] = 0;
+              }
+              salesMap[id] += (item.cartCount || 1);
+            });
+          }
+        });
+        
+        console.log('菜品点单统计:', salesMap);
+        
+        // 更新 categories 中的点单数据
+        const categories = this.data.categories.map(cate => ({
+          ...cate,
+          goodsList: cate.goodsList.map(goods => ({
+            ...goods,
+            sales: salesMap[goods.id] || 0
+          }))
+        }));
+        
+        this.setData({ categories });
+        
+        // 更新分类位置
+        setTimeout(() => {
+          this.updateCategoryTops();
+        }, 300);
+      },
+      fail: err => {
+        console.error('点单量查询失败', err);
+        // 查询失败不影响正常使用
+      }
+    });
   },
 
   // 加载各菜品的累计爱心数与评论数
@@ -754,7 +752,12 @@ Page({
         ownerId: this.data.ownerId // 订单归属的菜单主人
       },
       success: res => {
-        console.log('订单保存成功:', res);
+        // 云函数调用成功 ≠ 保存成功，须检查 result.success（否则写库失败被静默吞掉）
+        if (res.result && res.result.success) {
+          console.log('订单保存成功:', res);
+        } else {
+          console.error('订单云端保存失败（云函数已执行）:', res.result);
+        }
         wx.hideLoading();
         this.orderSubmitSuccess(orderNo, orderTime, items);
       },

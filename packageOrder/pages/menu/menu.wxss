@@ -140,6 +140,13 @@ page {
   align-items: center;
   justify-content: center;
   margin-left: auto;
+  gap: 12rpx;
+}
+/* 月点单量：显示在数量加减号左侧 */
+.card-sales {
+  font-size: 20rpx;
+  color: #999;
+  white-space: nowrap;
 }
 .card-info .van-card__bottom{
   display: flex;
@@ -322,17 +329,6 @@ page {
 
 .submit-btn.disabled {
   background: #c8c9cc;
-}
-
-/* 菜品卡片底部统计信息 */
-.card-meta {
-  display: flex;
-  gap: 16rpx;
-}
-
-.card-meta-item {
-  font-size: 20rpx;
-  color: #999;
 }
 
 /* 菜品点评 / 打赏弹窗 */

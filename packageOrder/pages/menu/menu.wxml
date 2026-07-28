@@ -72,13 +72,10 @@
               tag="{{goods.totalReward > 0 ? '❤ ' + goods.totalReward : ''}}"
               class="card-info"
             >
-              <!-- 累计点单/点评信息 -->
-              <view slot="bottom" class="card-meta">
-                <text class="card-meta-item" wx:if="{{goods.sales > 0}}">月点 {{goods.sales}}</text>
-                <text class="card-meta-item" wx:if="{{goods.commentCount > 0}}">{{goods.commentCount}} 条点评</text>
-              </view>
-              <!-- 自定义数量控制器（catchtap 防止触发卡片点击） -->
+              <!-- 数量控制区（catchtap 防止触发卡片点击）：点评数、月点单量、加减号依次排布 -->
               <view slot="num" class="card-num" catchtap="stopPropagation">
+                <text class="card-sales" wx:if="{{goods.commentCount > 0}}">{{goods.commentCount}} 条点评</text>
+                <text class="card-sales" wx:if="{{goods.sales > 0}}">月点 {{goods.sales}}</text>
                 <van-stepper 
                   button-size="20px"
                   theme="round"

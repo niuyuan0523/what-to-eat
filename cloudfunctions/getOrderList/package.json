@@ -1,0 +1,9 @@
+{
+  "name": "getOrderList",
+  "version": "1.0.0",
+  "description": "获取订单列表云函数（绕过集合权限限制）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

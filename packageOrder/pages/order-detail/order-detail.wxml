@@ -58,6 +58,36 @@
       <text class="tips-text">{{showShareTip ? '把订单分享给掌勺人，提醒TA开火吧~' : '订单已提交，坐等开饭吧~'}}</text>
     </view>
 
+    <!-- 状态操作：掌勺人流转状态 / 下单人取消待处理订单 -->
+    <view class="status-actions" wx:if="{{statusActions.length > 0}}">
+      <van-button
+        wx:for="{{statusActions}}"
+        wx:key="status"
+        type="{{item.type}}"
+        size="large"
+        round
+        plain="{{item.type === 'default'}}"
+        custom-class="status-action-btn"
+        data-status="{{item.status}}"
+        data-label="{{item.label}}"
+        bindtap="onStatusAction"
+      >
+        {{item.label}}
+      </van-button>
+    </view>
+    <view class="status-actions" wx:elif="{{isBuyer && !isOwner && orderDetail.status === 'pending'}}">
+      <van-button
+        type="default"
+        size="large"
+        round
+        plain
+        custom-class="status-action-btn"
+        bindtap="onBuyerCancel"
+      >
+        取消订单
+      </van-button>
+    </view>
+
     <!-- 分享给掌勺人 -->
     <view class="share-section">
       <button class="share-owner-btn" open-type="share">
