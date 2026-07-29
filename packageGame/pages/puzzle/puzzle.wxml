@@ -1,0 +1,86 @@
+<view class="page">
+
+  <!-- 游戏画布：点击与空位同行/列的方块推动 -->
+  <canvas type="2d" id="game" class="game-canvas" disable-scroll="true" bindtouchstart="onCanvasTouch"></canvas>
+
+  <!-- 对局 HUD -->
+  <view class="hud top-bar" style="top: {{hudTop}}px;" wx:if="{{phase === 'playing' || phase === 'win'}}">
+    <view class="stat-box">
+      <view class="stat-num">{{moves}}</view>
+      <view class="stat-label">步数</view>
+    </view>
+    <view class="level-tag">
+      <text>{{levelIcon}} {{levelName}}</text>
+      <text class="level-best">{{bestText}}</text>
+    </view>
+    <view class="stat-box">
+      <view class="stat-num">{{timeStr}}</view>
+      <view class="stat-label">用时</view>
+    </view>
+  </view>
+
+  <!-- 对局操作条 -->
+  <view class="action-bar" wx:if="{{phase === 'playing'}}">
+    <view class="act-btn" catchtap="openLevels">选关</view>
+    <view
+      class="act-btn peek"
+      bindtouchstart="peekOn"
+      bindtouchend="peekOff"
+      bindtouchcancel="peekOff"
+    >👀 按住看原图</view>
+    <view class="act-btn" catchtap="restart">重排</view>
+  </view>
+
+  <!-- 返回主页 -->
+  <view class="back-home" wx:if="{{phase === 'menu'}}" catchtap="onBackHome">← 返回主页</view>
+
+  <!-- 选关界面 -->
+  <view class="overlay scroll" wx:if="{{phase === 'menu'}}">
+    <view class="title">乾坤挪移</view>
+    <view class="sub">滑动方块 · 复原图案 · 一格一乾坤</view>
+    <view class="rules">
+      <view>🧩 点击与<text class="hl">空位同行/列</text>的方块，整段推过去</view>
+      <view>🖼️ 把打乱的图案<text class="hl">拼回原样</text>即可过关</view>
+      <view>🔓 每过一关解锁<text class="hl">新图案</text>，网格越来越大</view>
+      <view>📷 还能用<text class="hl">自己的照片</text>当拼图哦</view>
+    </view>
+
+    <view class="level-grid">
+      <view
+        wx:for="{{levelList}}"
+        wx:key="name"
+        class="level-card {{item.locked ? 'locked' : ''}}"
+        data-idx="{{index}}"
+        bindtap="onSelectLevel"
+      >
+        <view class="level-icon">{{item.locked ? '🔒' : item.icon}}</view>
+        <view class="level-name">{{item.name}}</view>
+        <view class="level-meta">{{item.gridLabel}}{{item.best ? ' · 最佳' + item.best + '步' : ''}}</view>
+      </view>
+      <!-- 照片关：相册选图自定义拼图 -->
+      <view class="level-card photo" bindtap="onPickPhoto">
+        <view class="level-icon">📷</view>
+        <view class="level-name">我的照片</view>
+        <view class="level-meta">相册选图 · 自选难度</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 过关结算 -->
+  <view class="overlay" wx:if="{{phase === 'win'}}">
+    <view class="win-icon">{{levelIcon}}</view>
+    <view class="win-title">拼好啦！</view>
+    <view class="win-stats">
+      <text>{{winMoves}} 步 · 用时 {{winTime}}</text>
+      <text class="win-new" wx:if="{{winIsNew}}">🎉 刷新最少步数纪录！</text>
+    </view>
+    <view class="btn-col">
+      <view class="btn primary" wx:if="{{hasNext}}" catchtap="nextLevel">下一关 →</view>
+      <view class="btn primary" wx:elif="{{winAllClear}}" catchtap="openLevels">已通关全部图案 · 回选关</view>
+      <view class="btn primary" wx:else catchtap="openLevels">回选关</view>
+      <view class="btn ghost" catchtap="restart">再拼一次</view>
+      <view class="btn ghost" wx:if="{{hasNext}}" catchtap="openLevels">回选关</view>
+    </view>
+  </view>
+
+</view>

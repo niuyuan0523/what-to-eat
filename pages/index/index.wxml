@@ -28,20 +28,12 @@
       <view class="module-arrow">›</view>
     </view>
 
-    <view class="module-card game" bindtap="goGame">
+    <!-- 小游戏合集：点击弹窗选择具体游戏 -->
+    <view class="module-card game" bindtap="openGamePicker">
       <view class="module-icon">🎮</view>
       <view class="module-info">
-        <view class="module-name">方块跳跳消</view>
-        <view class="module-sub">按压蓄力跳跃 · 堆叠消除小游戏</view>
-      </view>
-      <view class="module-arrow">›</view>
-    </view>
-
-    <view class="module-card golf" bindtap="goGolf">
-      <view class="module-icon">⛳</view>
-      <view class="module-info">
-        <view class="module-name">一杆进洞</view>
-        <view class="module-sub">滑动瞄准 · 蓄力击球 · 全服排行榜</view>
+        <view class="module-name">小游戏</view>
+        <view class="module-sub">方块跳跳消 · 一杆进洞 · 乾坤挪移</view>
       </view>
       <view class="module-arrow">›</view>
     </view>
@@ -53,6 +45,32 @@
         <view class="module-sub">记录拿手菜 · 自拍菜品图 · 专属家庭菜单</view>
       </view>
       <view class="module-arrow">›</view>
+    </view>
+  </view>
+
+  <!-- 游戏选择弹窗 -->
+  <view class="game-mask" wx:if="{{gamePickerShow}}" bindtap="closeGamePicker" catchtouchmove="noop">
+    <view class="game-sheet" catchtap="noop">
+      <view class="game-sheet-head">
+        <text class="game-sheet-title">🎮 选个游戏玩会儿</text>
+        <text class="game-sheet-close" catchtap="closeGamePicker">✕</text>
+      </view>
+      <view class="game-list">
+        <view
+          wx:for="{{games}}"
+          wx:key="url"
+          class="game-item"
+          data-url="{{item.url}}"
+          bindtap="goPlay"
+        >
+          <view class="game-item-icon" style="background: {{item.bg}};">{{item.icon}}</view>
+          <view class="game-item-info">
+            <view class="game-item-name">{{item.name}}</view>
+            <view class="game-item-sub">{{item.sub}}</view>
+          </view>
+          <view class="module-arrow">›</view>
+        </view>
+      </view>
     </view>
   </view>
 

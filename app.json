@@ -36,7 +36,8 @@
       "independent": true,
       "pages": [
         "pages/block-jump/block-jump",
-        "pages/golf/golf"
+        "pages/golf/golf",
+        "pages/puzzle/puzzle"
       ]
     }
   ],

@@ -73,10 +73,6 @@
   background: #f3ecff;
 }
 
-.module-card.golf .module-icon {
-  background: #e8f7e6;
-}
-
 .module-info {
   flex: 1;
   margin-left: 28rpx;
@@ -98,4 +94,97 @@
   font-size: 48rpx;
   color: #c8c8c8;
   flex-shrink: 0;
+}
+
+/* ---------- 游戏选择弹窗 ---------- */
+.game-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+}
+
+.game-sheet {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  animation: sheet-up 0.25s ease;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(40%); opacity: 0.5; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.game-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8rpx 8rpx;
+}
+
+.game-sheet-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.game-sheet-close {
+  font-size: 32rpx;
+  color: #b0b0b0;
+  padding: 8rpx 16rpx;
+}
+
+.game-list {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.game-item {
+  display: flex;
+  align-items: center;
+  padding: 28rpx 24rpx;
+  border-radius: 20rpx;
+  background: #f7f8fa;
+  transition: transform 0.15s ease;
+}
+
+.game-item:active {
+  transform: scale(0.97);
+}
+
+.game-item-icon {
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  flex-shrink: 0;
+}
+
+.game-item-info {
+  flex: 1;
+  margin-left: 24rpx;
+}
+
+.game-item-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.game-item-sub {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #9a9a9a;
 }
