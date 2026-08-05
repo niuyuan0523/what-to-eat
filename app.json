@@ -37,7 +37,8 @@
       "pages": [
         "pages/block-jump/block-jump",
         "pages/golf/golf",
-        "pages/puzzle/puzzle"
+        "pages/puzzle/puzzle",
+        "pages/cube/cube"
       ]
     }
   ],

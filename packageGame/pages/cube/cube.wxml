@@ -1,0 +1,80 @@
+<view class="page">
+
+  <!-- 游戏画布：空白处拖拽转视角，贴纸面上滑动转层 -->
+  <canvas
+    type="2d" id="game" class="game-canvas" disable-scroll="true"
+    bindtouchstart="onTouchStart"
+    bindtouchmove="onTouchMove"
+    bindtouchend="onTouchEnd"
+    bindtouchcancel="onTouchEnd"
+  ></canvas>
+
+  <!-- 对局 HUD -->
+  <view class="hud top-bar" style="top: {{hudTop}}px;" wx:if="{{phase === 'playing' || phase === 'win'}}">
+    <view class="stat-box">
+      <view class="stat-num">{{moves}}</view>
+      <view class="stat-label">步数</view>
+    </view>
+    <view class="level-tag">
+      <text>{{levelIcon}} {{levelName}}</text>
+      <text class="level-best">{{bestText}}</text>
+    </view>
+    <view class="stat-box">
+      <view class="stat-num">{{timeStr}}</view>
+      <view class="stat-label">用时</view>
+    </view>
+  </view>
+
+  <!-- 对局操作条 -->
+  <view class="action-bar" wx:if="{{phase === 'playing'}}">
+    <view class="act-btn" catchtap="openLevels">选关</view>
+    <view class="act-btn primary" catchtap="onScrambleReset">🔀 一键重置</view>
+  </view>
+
+  <!-- 返回主页 -->
+  <view class="back-home" wx:if="{{phase === 'menu'}}" catchtap="onBackHome">← 返回主页</view>
+
+  <!-- 选关界面 -->
+  <view class="overlay scroll" wx:if="{{phase === 'menu'}}">
+    <view class="title">魔方大师</view>
+    <view class="sub">3D 魔方 · 真实还原 · 层层推进</view>
+    <view class="rules">
+      <view>🖐️ 拖拽<text class="hl">空白处</text>旋转视角，看清每个面</view>
+      <view>👆 在<text class="hl">贴纸面上滑动</text>，对应的一层转 90°</view>
+      <view>🎯 目标：六个面<text class="hl">各自变成纯色</text>即复原成功</view>
+      <view>🔀 卡住了？<text class="hl">一键重置</text>重新打乱再来</view>
+    </view>
+
+    <view class="level-grid">
+      <view
+        wx:for="{{levelList}}"
+        wx:key="name"
+        class="level-card {{item.locked ? 'locked' : ''}}"
+        data-idx="{{index}}"
+        bindtap="onSelectLevel"
+      >
+        <view class="level-icon">{{item.locked ? '🔒' : item.icon}}</view>
+        <view class="level-name">{{item.name}}</view>
+        <view class="level-meta">{{item.gridLabel}}{{item.best ? ' · 最佳' + item.best + '步' : ''}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 复原结算 -->
+  <view class="overlay" wx:if="{{phase === 'win'}}">
+    <view class="win-icon">🎉</view>
+    <view class="win-title">复原成功！</view>
+    <view class="win-stats">
+      <text>{{winMoves}} 步 · 用时 {{winTime}}</text>
+      <text class="win-new" wx:if="{{winIsNew}}">🏆 刷新最少步数纪录！</text>
+    </view>
+    <view class="btn-col">
+      <view class="btn primary" wx:if="{{hasNext}}" catchtap="nextLevel">挑战下一阶 →</view>
+      <view class="btn primary" wx:elif="{{winAllClear}}" catchtap="openLevels">已征服全部阶数 · 回选关</view>
+      <view class="btn primary" wx:else catchtap="openLevels">回选关</view>
+      <view class="btn ghost" catchtap="restart">再拧一次</view>
+      <view class="btn ghost" wx:if="{{hasNext}}" catchtap="openLevels">回选关</view>
+    </view>
+  </view>
+
+</view>
